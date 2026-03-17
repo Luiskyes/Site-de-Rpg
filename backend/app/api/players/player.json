@@ -1,0 +1,29 @@
+{
+  "nome": "Isagi",
+  "numero": 11,
+  "altura_cm": 175,
+  "peso_kg": 68.5,
+
+  "potencia": 3,
+  "tecnica": 4,
+  "velocidade": 3,
+  "agilidade": 2,
+  "ego": 3,
+
+  "folego_max": 20,
+
+  "passe": 1,
+  "drible": 1,
+  "pontaria": 1,
+  "chute": 1,
+  "dominio": 1,
+  "acrobacia": 0,
+  "enganacao": 0,
+  "intuicao": 0,
+  "intimidacao": 0,
+  "roubo_de_bola": 0,
+  "corrida_longa_distancia": 0,
+  "explosao": 0,
+
+  "classe_id": null
+}

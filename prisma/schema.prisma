@@ -1,0 +1,33 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// -------------------------------------------------
+/// Modelos – você pode adaptar depois, mas isso já
+/// permite testar a migração e gerar o client.
+/// -------------------------------------------------
+model User {
+  id           Int         @id @default(autoincrement())
+  email        String      @unique
+  passwordHash String
+  createdAt    DateTime    @default(now())
+  characters   Character[]
+}
+
+model Character {
+  id         Int      @id @default(autoincrement())
+  name       String
+  class      String
+  level      Int      @default(1)
+  attributes Json?    // ex.: {"strength":12,"dexterity":14}
+  notes      String?
+  ownerId    Int
+  owner      User     @relation(fields: [ownerId], references: [id])
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}

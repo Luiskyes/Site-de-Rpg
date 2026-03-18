@@ -1,7 +1,10 @@
-const config = {
+// backend/postcss.config.mjs   
+/** @type {import('postcss').ProcessOptions} */
+module.exports = {
   plugins: {
-    "@tailwindcss/postcss": {},
+    // plugin oficial do Tailwind
+    tailwindcss: {},
+    // adiciona prefixos de navegador
+    autoprefixer: {},
   },
 };
-
-export default config;

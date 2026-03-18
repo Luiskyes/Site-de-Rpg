@@ -1,16 +1,6 @@
+// backend/lib/db.ts
 import { Pool } from "pg";
 
-let pool: Pool | null = null;
-
-export function getPool(): Pool {
-  if (!pool) {
-    pool = new Pool({
-      host: process.env.DB_HOST || "localhost",
-      port: parseInt(process.env.DB_PORT || "5432"),
-      user: process.env.DB_USER || "postgres",
-      password: process.env.DB_PASSWORD || "Luisrogerio1/",
-      database: process.env.DB_NAME || "site_rpg",
-    });
-  }
-  return pool;
-}
+export const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+});

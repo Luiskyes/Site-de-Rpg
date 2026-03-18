@@ -1,5 +1,8 @@
+// backend/app/api/db-test/route.js
 import { NextResponse } from "next/server";
-import { pool } from "@/lib/db"; // se @ não funcionar, veja a seção 3
+import { pool } from "../../../../lib/db";
+
+export const runtime = "nodejs";
 
 export async function GET() {
   try {

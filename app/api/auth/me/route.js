@@ -1,7 +1,7 @@
 // backend/app/api/auth/me/route.js
 import { NextResponse } from "next/server";
 import { verifySessionCookie } from "../../../../lib/auth";
-import { pool } from "../../../../../lib/db";
+import { pool } from "../../lib/db";
 
 export const runtime = "nodejs";
 

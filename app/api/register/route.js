@@ -1,7 +1,7 @@
 // backend/app/api/register/route.js
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import { pool } from "../../../../lib/db";
+import { pool } from "../lib/db";
 import { createSessionToken } from "../../../lib/auth";
 
 export const runtime = "nodejs";

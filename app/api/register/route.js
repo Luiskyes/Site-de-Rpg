@@ -1,7 +1,8 @@
-// backend/app/api/register/route.js
+// app/api/register/route.js
+
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
-import { pool } from "../lib/db";
+import { pool } from "../../../lib/db";
 import { createSessionToken } from "../../../lib/auth";
 
 export const runtime = "nodejs";
@@ -12,33 +13,40 @@ export async function POST(req) {
 
     if (!email || !password) {
       return NextResponse.json(
-        { error: "E‑mail e senha são obrigatórios" },
+        { error: "E-mail e senha são obrigatórios" },
         { status: 400 }
       );
     }
 
-    // verifica e‑mail duplicado
-    const { rowCount } = await pool.query(
+    // Verifica se já existe usuário com esse e-mail
+    const existing = await pool.query(
       "SELECT 1 FROM users WHERE email = $1",
       [email]
     );
-    if (rowCount > 0) {
+
+    if (existing.rowCount > 0) {
       return NextResponse.json(
-        { error: "E‑mail já cadastrado" },
+        { error: "E-mail já cadastrado" },
         { status: 409 }
       );
     }
 
+    // Gera o hash da senha
     const hashedPassword = await bcrypt.hash(password, 10);
-    const { rows } = await pool.query(
-      "INSERT INTO users (email, password) VALUES ($1, $2) RETURNING id, email",
+
+    // Insere o novo usuário no banco
+    const result = await pool.query(
+      'INSERT INTO users (email, "passwordHash") VALUES ($1, $2) RETURNING id, email',
       [email, hashedPassword]
     );
-    const user = rows[0];
 
-    // gera token JWT e envia cookie
+    const user = result.rows[0];
+
+    // Cria token de sessão
     const token = await createSessionToken(user.id);
+
     const response = NextResponse.json(user, { status: 201 });
+
     response.cookies.set("session", token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
@@ -49,9 +57,13 @@ export async function POST(req) {
 
     return response;
   } catch (err) {
-    console.error(err);
+    console.error("REGISTER ERROR:", err);
+
     return NextResponse.json(
-      { error: "Erro ao registrar", detail: err?.message ?? err },
+      {
+        error: "Erro ao registrar",
+        detail: err?.message ?? String(err),
+      },
       { status: 500 }
     );
   }

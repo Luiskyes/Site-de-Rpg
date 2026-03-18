@@ -1,18 +1,22 @@
-// backend/app/api/logout/route.js
+// app/api/logout/route.js
+
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 
 export async function POST() {
-  // Apaga o cookie “session”
-  const response = NextResponse.json({ message: "Deslogado" });
+  const response = NextResponse.json(
+    { message: "Logout realizado com sucesso" },
+    { status: 200 }
+  );
+
   response.cookies.set("session", "", {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
-    maxAge: 0,               // expira imediatamente
-    expires: new Date(0),      // data no passado
+    expires: new Date(0),
     path: "/",
   });
+
   return response;
 }

@@ -17,9 +17,9 @@ export async function GET(req) {
 
     const result = await pool.query(
       `
-      SELECT id, email, "createdAt"
-      FROM users
-      WHERE id = $1
+      SELECT id, name, class, level
+      FROM "Character"
+      WHERE "ownerId" = $1
       LIMIT 1
       `,
       [userId]
@@ -27,17 +27,20 @@ export async function GET(req) {
 
     if (result.rowCount === 0) {
       return NextResponse.json(
-        { error: "Usuário não encontrado" },
+        { error: "Ficha não encontrada" },
         { status: 404 }
       );
     }
 
-    return NextResponse.json(result.rows[0]);
+    return NextResponse.json(result.rows[0], { status: 200 });
   } catch (err) {
-    console.error("AUTH ME ERROR:", err);
+    console.error("GET MY CHARACTER ERROR:", err);
 
     return NextResponse.json(
-      { error: "Erro ao buscar usuário autenticado" },
+      {
+        error: "Erro ao buscar ficha do usuário",
+        detail: err?.message ?? String(err),
+      },
       { status: 500 }
     );
   }

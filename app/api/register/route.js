@@ -1,5 +1,3 @@
-// app/api/register/route.js
-
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { pool } from "../../../lib/db";
@@ -18,41 +16,46 @@ export async function POST(req) {
       );
     }
 
-    // Verifica se já existe usuário com esse e-mail
-    const existing = await pool.query(
-      "SELECT 1 FROM users WHERE email = $1",
+    const existingUser = await pool.query(
+      `SELECT id FROM users WHERE email = $1`,
       [email]
     );
 
-    if (existing.rowCount > 0) {
+    if (existingUser.rowCount > 0) {
       return NextResponse.json(
         { error: "E-mail já cadastrado" },
         { status: 409 }
       );
     }
 
-    // Gera o hash da senha
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const passwordHash = await bcrypt.hash(password, 10);
 
-    // Insere o novo usuário no banco
     const result = await pool.query(
-      'INSERT INTO users (email, "passwordHash") VALUES ($1, $2) RETURNING id, email',
-      [email, hashedPassword]
+      `
+      INSERT INTO users (email, "passwordHash")
+      VALUES ($1, $2)
+      RETURNING id, email, "createdAt"
+      `,
+      [email, passwordHash]
     );
 
     const user = result.rows[0];
-
-    // Cria token de sessão
     const token = await createSessionToken(user.id);
 
-    const response = NextResponse.json(user, { status: 201 });
+    const response = NextResponse.json(
+      {
+        id: user.id,
+        email: user.email,
+      },
+      { status: 201 }
+    );
 
     response.cookies.set("session", token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
+      secure: false,
       sameSite: "lax",
-      maxAge: 60 * 60 * 24 * 7,
       path: "/",
+      maxAge: 60 * 60 * 24 * 7,
     });
 
     return response;

@@ -22,14 +22,20 @@ export async function GET(req, context) {
         id,
         name,
         class,
+        "classId",
+        "selectedAbility",
         level,
         age,
         "heightCm",
         "weightKg",
         "staminaBase",
         "staminaCurrent",
-        "baseAttributes",
-        "baseSkills"
+        "classAttributes",
+        "classSkills",
+        "allocatedAttributes",
+        "allocatedSkills",
+        "levelUpAttributes",
+        "levelUpSkills"
       FROM "Character"
       WHERE id = $1
       `,

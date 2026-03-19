@@ -8,29 +8,44 @@ datasource db {
 }
 
 model Character {
-  id             Int      @id @default(autoincrement())
-  name           String
-  class          String
-  level          Int      @default(1)
-  attributes     Json?
-  notes          String?
-  ownerId        Int
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  age            Int?
-  heightCm       Int?
-  weightKg       Int?
-  staminaBase    Int?
-  staminaCurrent Int?
-  baseAttributes Json?
-  baseSkills     Json?
-  owner          users    @relation(fields: [ownerId], references: [id])
+  id              Int      @id @default(autoincrement())
+  name            String
+  class           String
+  level           Int      @default(1)
+  attributes      Json?
+  notes           String?
+  ownerId         Int      @unique(map: "Character_ownerId_unique")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  age             Int?
+  heightCm        Int?
+  weightKg        Int?
+  staminaBase     Int?
+  staminaCurrent  Int?
+  baseAttributes  Json?
+  baseSkills      Json?
+  classId         Int?
+  selectedAbility String?
+  classData       Class?   @relation(fields: [classId], references: [id])
+  owner           users    @relation(fields: [ownerId], references: [id])
+}
+
+model Class {
+  id               Int         @id @default(autoincrement())
+  name             String      @unique
+  description      String?
+  attributeBonuses Json?
+  skillBonuses     Json?
+  abilities        Json?
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @default(now()) @updatedAt
+  characters       Character[]
 }
 
 model users {
-  id           Int         @id(map: "User_pkey") @default(autoincrement())
-  email        String      @unique(map: "User_email_key")
+  id           Int        @id(map: "User_pkey") @default(autoincrement())
+  email        String     @unique(map: "User_email_key")
   passwordHash String
-  createdAt    DateTime    @default(now())
-  characters   Character[]
+  createdAt    DateTime   @default(now())
+  characters   Character?
 }

@@ -10,266 +10,342 @@ export default function HomePage() {
   const [user, setUser] = useState(null);
   const [character, setCharacter] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   useEffect(() => {
-    async function load() {
+    async function loadData() {
       try {
-        const userRes = await fetch("/api/auth/me");
+        const userResponse = await fetch("/api/auth/me", {
+          method: "GET",
+          credentials: "include",
+          cache: "no-store",
+        });
 
-        if (!userRes.ok) {
+        if (!userResponse.ok) {
           router.push("/login");
           return;
         }
 
-        const userData = await userRes.json();
+        const userData = await userResponse.json();
         setUser(userData);
 
-        const charRes = await fetch("/api/characters/me");
+        const characterResponse = await fetch("/api/characters/me", {
+          method: "GET",
+          credentials: "include",
+          cache: "no-store",
+        });
 
-        if (charRes.ok) {
-          const char = await charRes.json();
-          setCharacter(char);
+        if (characterResponse.ok) {
+          const characterData = await characterResponse.json();
+          setCharacter(characterData);
+        } else {
+          setCharacter(null);
         }
-      } catch (err) {
-        console.error(err);
+      } catch (error) {
+        console.error("HOME LOAD ERROR:", error);
+        router.push("/login");
       } finally {
         setLoading(false);
       }
     }
 
-    load();
+    loadData();
   }, [router]);
 
-  async function logout() {
-    await fetch("/api/logout", { method: "POST" });
-    router.push("/login");
-    router.refresh();
+  async function handleLogout() {
+    try {
+      setLoggingOut(true);
+
+      const response = await fetch("/api/logout", {
+        method: "POST",
+        credentials: "include",
+      });
+
+      if (response.ok) {
+        router.push("/login");
+        router.refresh();
+      }
+    } catch (error) {
+      console.error("Erro ao sair da conta:", error);
+    } finally {
+      setLoggingOut(false);
+    }
   }
 
   if (loading) {
     return (
-      <main style={styles.loading}>
-        Carregando...
+      <main style={styles.loadingPage}>
+        <div style={styles.loadingCard}>Carregando home...</div>
       </main>
     );
   }
 
   const hasCharacter = !!character;
+  const mainHref = hasCharacter
+    ? `/characters/${character.id}`
+    : "/characters/create";
 
   return (
     <main style={styles.page}>
       <div style={styles.container}>
-
-        <header style={styles.header}>
-          <button onClick={logout} style={styles.logout}>
-            Sair da conta
+        <header style={styles.topBar}>
+          <button
+            onClick={handleLogout}
+            style={styles.logoutButton}
+            disabled={loggingOut}
+          >
+            {loggingOut ? "Saindo..." : "Sair da conta"}
           </button>
         </header>
 
-        <section style={styles.hero}>
+        <section style={styles.heroCard}>
           <div>
-            <p style={styles.tag}>Sistema RPG</p>
-
-            <h1 style={styles.title}>
-              Bem-vindo {user?.email}
+            <p style={styles.heroTag}>Painel Principal</p>
+            <h1 style={styles.heroTitle}>
+              Bem-vindo{user?.email ? `, ${user.email}` : ""}
             </h1>
-
-            <p style={styles.subtitle}>
-              Gerencie seu personagem e acompanhe sua evolução.
+            <p style={styles.heroSubtitle}>
+              Gerencie sua ficha, acompanhe seus atributos e entre no jogo com tudo pronto.
             </p>
           </div>
 
-          <div style={styles.heroStatus}>
-            <span style={styles.statusLabel}>
-              Status da ficha
+          <div style={styles.heroInfoBox}>
+            <span style={styles.heroInfoLabel}>Status da ficha</span>
+            <span style={styles.heroInfoValue}>
+              {hasCharacter ? "Ficha criada" : "Sem ficha"}
             </span>
 
-            <strong style={styles.statusValue}>
-              {hasCharacter ? "Ficha criada" : "Sem ficha"}
-            </strong>
-
-            {hasCharacter && (
-              <small style={styles.statusMeta}>
+            {hasCharacter ? (
+              <small style={styles.heroInfoMeta}>
                 {character.name} • {character.class}
+              </small>
+            ) : (
+              <small style={styles.heroInfoMeta}>
+                Crie sua primeira ficha para começar
               </small>
             )}
           </div>
         </section>
 
-        <section style={styles.actions}>
-
-          {hasCharacter ? (
-
-            <Link
-              href={`/characters/${character.id}`}
-              style={styles.primaryCard}
-            >
-              <div>
-                <p style={styles.cardTag}>Jogador</p>
-
-                <h2 style={styles.cardTitle}>
-                  Ver Jogador
-                </h2>
-
-                <p style={styles.cardText}>
-                  Visualize sua ficha completa com atributos e perícias.
-                </p>
-              </div>
-
-              <span style={styles.arrow}>→</span>
-            </Link>
-
-          ) : (
-
-            <Link
-              href="/characters/create"
-              style={styles.primaryCard}
-            >
-              <div>
-                <p style={styles.cardTag}>Criação</p>
-
-                <h2 style={styles.cardTitle}>
-                  Criar Ficha
-                </h2>
-
-                <p style={styles.cardText}>
-                  Escolha uma classe e distribua seus pontos iniciais.
-                </p>
-              </div>
-
-              <span style={styles.arrow}>→</span>
-            </Link>
-
-          )}
-
+        <section style={styles.quickStatsGrid}>
+          <InfoCard label="Conta" value={user?.email || "-"} small />
+          <InfoCard label="Personagem" value={hasCharacter ? character.name : "Nenhum"} />
+          <InfoCard label="Classe" value={hasCharacter ? character.class : "-"} />
+          <InfoCard label="Nível" value={hasCharacter ? String(character.level ?? 1) : "-"} />
         </section>
 
+        <section style={styles.actionsGrid}>
+          <Link href={mainHref} style={styles.primaryActionCard}>
+            <div style={styles.actionContent}>
+              <span style={styles.actionTag}>Jogador</span>
+              <h2 style={styles.actionTitle}>
+                {hasCharacter ? "Ver Jogador" : "Criar Ficha"}
+              </h2>
+              <p style={styles.actionText}>
+                {hasCharacter
+                  ? "Abra a ficha completa do seu personagem com atributos e perícias."
+                  : "Você ainda não tem ficha. Clique para criar e começar."}
+              </p>
+            </div>
+
+            <div style={styles.actionSide}>
+              <span style={styles.actionArrow}>→</span>
+            </div>
+          </Link>
+        </section>
       </div>
     </main>
   );
 }
 
+function InfoCard({ label, value, small = false }) {
+  return (
+    <div style={styles.infoCard}>
+      <span style={styles.infoLabel}>{label}</span>
+      <span
+        style={{
+          ...styles.infoValue,
+          fontSize: small ? "18px" : styles.infoValue.fontSize,
+        }}
+      >
+        {value}
+      </span>
+    </div>
+  );
+}
+
 const styles = {
-
-page:{
-minHeight:"100vh",
-background:"radial-gradient(circle at top, rgba(37,99,235,0.18), transparent 30%), #0b1120",
-color:"#f8fafc",
-padding:"24px"
-},
-
-container:{
-maxWidth:"1200px",
-margin:"0 auto",
-display:"flex",
-flexDirection:"column",
-gap:"20px"
-},
-
-loading:{
-minHeight:"100vh",
-display:"flex",
-alignItems:"center",
-justifyContent:"center",
-background:"#0b1120",
-color:"#fff"
-},
-
-header:{
-display:"flex",
-justifyContent:"flex-start"
-},
-
-logout:{
-background:"#dc2626",
-border:"none",
-padding:"12px 16px",
-borderRadius:"12px",
-color:"#fff",
-fontWeight:"bold",
-cursor:"pointer"
-},
-
-hero:{
-display:"flex",
-justifyContent:"space-between",
-alignItems:"center",
-background:"linear-gradient(135deg,#111827,#172033)",
-borderRadius:"20px",
-padding:"28px"
-},
-
-tag:{
-color:"#93c5fd",
-fontSize:"14px",
-margin:0
-},
-
-title:{
-fontSize:"40px",
-margin:"6px 0"
-},
-
-subtitle:{
-color:"#cbd5e1"
-},
-
-heroStatus:{
-background:"rgba(255,255,255,0.05)",
-padding:"18px",
-borderRadius:"14px",
-display:"flex",
-flexDirection:"column",
-gap:"4px"
-},
-
-statusLabel:{
-fontSize:"12px",
-color:"#94a3b8"
-},
-
-statusValue:{
-fontSize:"20px"
-},
-
-statusMeta:{
-color:"#cbd5e1"
-},
-
-actions:{
-display:"grid",
-gridTemplateColumns:"1fr",
-gap:"16px"
-},
-
-primaryCard:{
-display:"flex",
-justifyContent:"space-between",
-alignItems:"center",
-background:"linear-gradient(135deg,#2563eb,#1d4ed8)",
-borderRadius:"20px",
-padding:"28px",
-textDecoration:"none",
-color:"#fff"
-},
-
-cardTag:{
-fontSize:"12px",
-opacity:0.8
-},
-
-cardTitle:{
-fontSize:"30px",
-margin:"4px 0"
-},
-
-cardText:{
-maxWidth:"400px",
-opacity:0.9
-},
-
-arrow:{
-fontSize:"42px"
-}
-
-}
+  page: {
+    minHeight: "100vh",
+    background:
+      "radial-gradient(circle at top, rgba(37,99,235,0.18), transparent 30%), #0b1120",
+    color: "#f8fafc",
+    padding: "24px",
+  },
+  container: {
+    width: "100%",
+    maxWidth: "1280px",
+    margin: "0 auto",
+    display: "flex",
+    flexDirection: "column",
+    gap: "20px",
+  },
+  loadingPage: {
+    minHeight: "100vh",
+    background: "#0b1120",
+    color: "#f8fafc",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "24px",
+  },
+  loadingCard: {
+    background: "#111827",
+    border: "1px solid rgba(255,255,255,0.08)",
+    borderRadius: "20px",
+    padding: "28px 36px",
+    fontSize: "18px",
+  },
+  topBar: {
+    display: "flex",
+    justifyContent: "flex-start",
+    alignItems: "center",
+  },
+  logoutButton: {
+    background: "#dc2626",
+    color: "#fff",
+    border: "none",
+    borderRadius: "14px",
+    padding: "12px 16px",
+    fontWeight: "bold",
+    cursor: "pointer",
+  },
+  heroCard: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: "20px",
+    background: "linear-gradient(135deg, #111827, #172033)",
+    borderRadius: "24px",
+    padding: "28px",
+    border: "1px solid rgba(255,255,255,0.08)",
+  },
+  heroTag: {
+    margin: 0,
+    marginBottom: "8px",
+    color: "#93c5fd",
+    fontSize: "14px",
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+  heroTitle: {
+    margin: 0,
+    fontSize: "40px",
+    lineHeight: 1.1,
+  },
+  heroSubtitle: {
+    marginTop: "10px",
+    marginBottom: 0,
+    color: "#cbd5e1",
+    fontSize: "17px",
+    maxWidth: "760px",
+  },
+  heroInfoBox: {
+    minWidth: "250px",
+    background: "rgba(255,255,255,0.04)",
+    borderRadius: "18px",
+    padding: "18px",
+    display: "flex",
+    flexDirection: "column",
+    gap: "8px",
+  },
+  heroInfoLabel: {
+    color: "#94a3b8",
+    fontSize: "13px",
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+  heroInfoValue: {
+    fontSize: "22px",
+    fontWeight: "bold",
+  },
+  heroInfoMeta: {
+    color: "#cbd5e1",
+    fontSize: "13px",
+    lineHeight: 1.5,
+  },
+  quickStatsGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+    gap: "16px",
+  },
+  infoCard: {
+    background: "#111827",
+    borderRadius: "20px",
+    padding: "20px",
+    border: "1px solid rgba(255,255,255,0.06)",
+    display: "flex",
+    flexDirection: "column",
+    gap: "10px",
+  },
+  infoLabel: {
+    color: "#94a3b8",
+    fontSize: "14px",
+  },
+  infoValue: {
+    fontSize: "26px",
+    fontWeight: "bold",
+    wordBreak: "break-word",
+  },
+  actionsGrid: {
+    display: "grid",
+    gridTemplateColumns: "1fr",
+    gap: "18px",
+  },
+  primaryActionCard: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: "16px",
+    background: "linear-gradient(135deg, #1d4ed8, #2563eb)",
+    color: "#fff",
+    textDecoration: "none",
+    borderRadius: "24px",
+    padding: "28px",
+    minHeight: "230px",
+    boxShadow: "0 10px 30px rgba(0,0,0,0.25)",
+  },
+  actionContent: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "10px",
+    maxWidth: "380px",
+  },
+  actionTag: {
+    fontSize: "13px",
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    opacity: 0.9,
+  },
+  actionTitle: {
+    margin: 0,
+    fontSize: "32px",
+    lineHeight: 1.1,
+  },
+  actionText: {
+    margin: 0,
+    fontSize: "16px",
+    lineHeight: 1.6,
+    opacity: 0.96,
+  },
+  actionSide: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  actionArrow: {
+    fontSize: "44px",
+    fontWeight: "bold",
+    opacity: 0.95,
+  },
+};

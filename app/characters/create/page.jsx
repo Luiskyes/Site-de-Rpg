@@ -3,6 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import {
+  getHeightModifiers,
+  getWeightModifiers,
+  getAmbidexterityModifiers,
+} from "../../../lib/character-rules";
 
 const EMPTY_ATTRIBUTES = {
   potencia: 0,
@@ -75,26 +80,11 @@ const skillLabels = {
 };
 
 const skillGroups = [
-  {
-    title: "Potência",
-    keys: ["corpoACorpo", "cabecio", "chute"],
-  },
-  {
-    title: "Técnica",
-    keys: ["pontaria", "dominio", "passe", "drible", "rouboDeBola"],
-  },
-  {
-    title: "Agilidade",
-    keys: ["acrobacias", "defesa", "reflexos", "furtividade"],
-  },
-  {
-    title: "Velocidade",
-    keys: ["corridaLongaDistancia", "explosao", "ritmoDeJogo"],
-  },
-  {
-    title: "Ego",
-    keys: ["intuicao", "intimidacao", "presenca", "lideranca", "enganacao"],
-  },
+  { title: "Potência", keys: ["corpoACorpo", "cabecio", "chute"] },
+  { title: "Técnica", keys: ["pontaria", "dominio", "passe", "drible", "rouboDeBola"] },
+  { title: "Agilidade", keys: ["acrobacias", "defesa", "reflexos", "furtividade"] },
+  { title: "Velocidade", keys: ["corridaLongaDistancia", "explosao", "ritmoDeJogo"] },
+  { title: "Ego", keys: ["intuicao", "intimidacao", "presenca", "lideranca", "enganacao"] },
 ];
 
 function sumValues(obj) {
@@ -151,6 +141,8 @@ export default function CreateCharacterPage() {
     allocatedAttributes: { ...EMPTY_ATTRIBUTES },
     allocatedSkills: { ...EMPTY_SKILLS },
     notes: "",
+    specialTrait: null,
+    isAmbidextrous: false,
   });
 
   const [error, setError] = useState("");
@@ -200,17 +192,55 @@ export default function CreateCharacterPage() {
     return getPassiveSkillBonusesFromAttributes(finalAttributes);
   }, [finalAttributes]);
 
+  const heightModifiers = useMemo(() => {
+    return getHeightModifiers(
+      form.heightCm === "" ? null : Number(form.heightCm),
+      false
+    );
+  }, [form.heightCm]);
+
+  const weightModifiers = useMemo(() => {
+    return getWeightModifiers(
+      form.weightKg === "" ? null : Number(form.weightKg),
+      false
+    );
+  }, [form.weightKg]);
+
+  const ambidexterityModifiers = useMemo(() => {
+    return getAmbidexterityModifiers(form.isAmbidextrous);
+  }, [form.isAmbidextrous]);
+
   const finalSkillsPreview = useMemo(() => {
-    return mergeNumberObjects(classSkills, form.allocatedSkills, passiveBonuses);
-  }, [classSkills, form.allocatedSkills, passiveBonuses]);
+    return mergeNumberObjects(
+      classSkills,
+      form.allocatedSkills,
+      passiveBonuses,
+      heightModifiers,
+      weightModifiers,
+      ambidexterityModifiers
+    );
+  }, [
+    classSkills,
+    form.allocatedSkills,
+    passiveBonuses,
+    heightModifiers,
+    weightModifiers,
+    ambidexterityModifiers,
+  ]);
+
+  const baseAttributeTotal = config?.attributePointsAtCreation ?? 7;
+  const baseSkillTotal = config?.skillPointsAtCreation ?? 15;
+  const baseAttributeMax = config?.attributeMaxAtCreation ?? 5;
+  const baseSkillMax = config?.skillMaxAtCreation ?? 10;
+
+  const extraAttributePoints = form.specialTrait === "prodigio" ? 6 : 0;
+  const extraSkillPoints = form.specialTrait === "genio" ? 6 : 0;
+
+  const attributeTotal = baseAttributeTotal + extraAttributePoints;
+  const skillTotal = baseSkillTotal + extraSkillPoints;
 
   const attributePointsSpent = useMemo(() => sumValues(form.allocatedAttributes), [form.allocatedAttributes]);
   const skillPointsSpent = useMemo(() => sumValues(form.allocatedSkills), [form.allocatedSkills]);
-
-  const attributeTotal = config?.attributePointsAtCreation ?? 7;
-  const skillTotal = config?.skillPointsAtCreation ?? 15;
-  const attributeMax = config?.attributeMaxAtCreation ?? 5;
-  const skillMax = config?.skillMaxAtCreation ?? 10;
 
   const selectedAbilityData = useMemo(() => {
     return (selectedClassData?.abilities || []).find(
@@ -238,8 +268,25 @@ export default function CreateCharacterPage() {
     }));
   }
 
+  function handleTraitChange(trait) {
+    setForm((prev) => ({
+      ...prev,
+      specialTrait: prev.specialTrait === trait ? null : trait,
+    }));
+  }
+
+  function toggleAmbidexterity() {
+    setForm((prev) => ({
+      ...prev,
+      isAmbidextrous: !prev.isAmbidextrous,
+    }));
+  }
+
   function handleAttributeChange(key, rawValue) {
-    const nextValue = Math.max(0, Math.min(Number(rawValue || 0), attributeMax));
+    const value = Number(rawValue || 0);
+    const maxAllowed = form.specialTrait === "prodigio" ? 999 : baseAttributeMax;
+    const nextValue = Math.max(0, Math.min(value, maxAllowed));
+
     const previous = Number(form.allocatedAttributes[key] || 0);
     const nextSpent = attributePointsSpent - previous + nextValue;
 
@@ -255,7 +302,10 @@ export default function CreateCharacterPage() {
   }
 
   function handleSkillChange(key, rawValue) {
-    const nextValue = Math.max(0, Math.min(Number(rawValue || 0), skillMax));
+    const value = Number(rawValue || 0);
+    const maxAllowed = form.specialTrait === "genio" ? 999 : baseSkillMax;
+    const nextValue = Math.max(0, Math.min(value, maxAllowed));
+
     const previous = Number(form.allocatedSkills[key] || 0);
     const nextSpent = skillPointsSpent - previous + nextValue;
 
@@ -323,6 +373,8 @@ export default function CreateCharacterPage() {
         allocatedAttributes: form.allocatedAttributes,
         allocatedSkills: form.allocatedSkills,
         notes: form.notes.trim() || null,
+        specialTrait: form.specialTrait,
+        isAmbidextrous: form.isAmbidextrous,
       };
 
       const response = await fetch("/api/characters", {
@@ -345,7 +397,7 @@ export default function CreateCharacterPage() {
       setTimeout(() => {
         router.push(`/characters/${data.id}`);
       }, 700);
-    } catch (err) {
+    } catch {
       setError("Erro inesperado ao criar ficha");
     } finally {
       setSaving(false);
@@ -367,12 +419,6 @@ export default function CreateCharacterPage() {
           <Link href="/" style={styles.topButton}>
             ← Voltar
           </Link>
-
-          <div style={styles.topActions}>
-            <Link href="/" style={styles.secondaryButton}>
-              Home
-            </Link>
-          </div>
         </header>
 
         <div style={styles.layout}>
@@ -382,7 +428,7 @@ export default function CreateCharacterPage() {
                 <p style={styles.heroTag}>Nova ficha</p>
                 <h1 style={styles.heroTitle}>Criar Personagem</h1>
                 <p style={styles.heroSubtitle}>
-                  Escolha a classe, distribua seus pontos e defina sua habilidade inicial.
+                  Escolha a classe, defina o perfil especial e distribua os pontos com clareza.
                 </p>
               </div>
             </div>
@@ -390,14 +436,7 @@ export default function CreateCharacterPage() {
             <form onSubmit={handleSubmit} style={styles.form}>
               <Card title="Dados Básicos" subtitle="Informações principais do personagem">
                 <div style={styles.gridTwo}>
-                  <Field
-                    label="Nome"
-                    name="name"
-                    value={form.name}
-                    onChange={handleBasicChange}
-                    required
-                  />
-
+                  <Field label="Nome" name="name" value={form.name} onChange={handleBasicChange} required />
                   <div style={styles.field}>
                     <label htmlFor="classId">Classe</label>
                     <select
@@ -406,22 +445,49 @@ export default function CreateCharacterPage() {
                       value={form.classId}
                       onChange={handleClassChange}
                       style={styles.input}
-                      required
                     >
-                      <option value="">Selecione uma classe</option>
+                      <option value="">Selecione</option>
                       {classes.map((item) => (
-                        <option key={item.id} value={item.id}>
-                          {item.name}
+                        <option
+                          key={String(item.id)}
+                          value={item.id}
+                          disabled={item.isTaken}
+                        >
+                          {item.name}{item.isTaken ? " (ocupada)" : ""}
                         </option>
                       ))}
                     </select>
                   </div>
-
                   <Field label="Idade" name="age" type="number" value={form.age} onChange={handleBasicChange} />
                   <Field label="Altura (cm)" name="heightCm" type="number" value={form.heightCm} onChange={handleBasicChange} />
                   <Field label="Peso (kg)" name="weightKg" type="number" value={form.weightKg} onChange={handleBasicChange} />
                   <Field label="Fôlego Base" name="staminaBase" type="number" value={form.staminaBase} onChange={handleBasicChange} />
-                  <Field label="Fôlego Atual" name="staminaCurrent" type="number" value={form.staminaCurrent} onChange={handleBasicChange} />
+                </div>
+              </Card>
+
+              <Card title="Traços Especiais" subtitle="Escolha seus diferenciais antes de distribuir os pontos">
+                <div style={styles.traitsGrid}>
+                  <TraitButton
+                    title="Prodígio"
+                    description="Recebe +6 pontos extras em atributos, sem respeitar o limite normal de 5."
+                    active={form.specialTrait === "prodigio"}
+                    onClick={() => handleTraitChange("prodigio")}
+                    accent="green"
+                  />
+                  <TraitButton
+                    title="Gênio"
+                    description="Recebe +6 pontos extras em perícias, sem respeitar o limite normal de 10."
+                    active={form.specialTrait === "genio"}
+                    onClick={() => handleTraitChange("genio")}
+                    accent="blue"
+                  />
+                  <TraitButton
+                    title="Ambidestria"
+                    description="Traço independente. Dá +6 em Chute, Pontaria, Passe, Drible e Domínio."
+                    active={form.isAmbidextrous}
+                    onClick={toggleAmbidexterity}
+                    accent="purple"
+                  />
                 </div>
               </Card>
 
@@ -437,16 +503,8 @@ export default function CreateCharacterPage() {
                   </div>
 
                   <div style={styles.previewGrid}>
-                    <PreviewStatsCard
-                      title="Atributos da classe"
-                      data={classAttributes}
-                      labels={attributeLabels}
-                    />
-                    <PreviewStatsCard
-                      title="Perícias da classe"
-                      data={classSkills}
-                      labels={skillLabels}
-                    />
+                    <PreviewStatsCard title="Atributos da classe" data={classAttributes} labels={attributeLabels} />
+                    <PreviewStatsCard title="Perícias da classe" data={classSkills} labels={skillLabels} />
                   </div>
 
                   <div style={styles.field}>
@@ -457,9 +515,8 @@ export default function CreateCharacterPage() {
                       value={form.selectedAbility}
                       onChange={handleBasicChange}
                       style={styles.input}
-                      required
                     >
-                      <option value="">Selecione uma habilidade</option>
+                      <option value="">Selecione</option>
                       {(selectedClassData.abilities || []).map((ability) => (
                         <option key={ability.name} value={ability.name}>
                           {ability.name}
@@ -472,19 +529,7 @@ export default function CreateCharacterPage() {
                     <div style={styles.abilityCard}>
                       <div style={styles.abilityTop}>
                         <h4 style={styles.abilityName}>{selectedAbilityData.name}</h4>
-                        <div style={styles.abilityBadges}>
-                          {selectedAbilityData.type ? (
-                            <span style={styles.badgeMuted}>{selectedAbilityData.type}</span>
-                          ) : null}
-                          {selectedAbilityData.cost !== undefined && selectedAbilityData.cost !== null ? (
-                            <span style={styles.badgeBlue}>Custo {selectedAbilityData.cost}</span>
-                          ) : null}
-                          {selectedAbilityData.duration ? (
-                            <span style={styles.badgeMuted}>{selectedAbilityData.duration}</span>
-                          ) : null}
-                        </div>
                       </div>
-
                       <p style={styles.abilityDescription}>
                         {selectedAbilityData.description || "Sem descrição."}
                       </p>
@@ -495,13 +540,11 @@ export default function CreateCharacterPage() {
 
               <Card
                 title="Atributos Livres"
-                subtitle={`Distribua ${attributeTotal} pontos. Máximo de ${attributeMax} por atributo.`}
+                subtitle={`Base: ${baseAttributeTotal}. ${form.specialTrait === "prodigio" ? "Prodígio ativo: +6 extras e sem limite de 5." : `Máximo de ${baseAttributeMax} por atributo.`}`}
               >
                 <div style={styles.progressBox}>
                   <span>Pontos gastos</span>
-                  <strong>
-                    {attributePointsSpent}/{attributeTotal}
-                  </strong>
+                  <strong>{attributePointsSpent}/{attributeTotal}</strong>
                 </div>
 
                 <div style={styles.attributesGrid}>
@@ -512,7 +555,6 @@ export default function CreateCharacterPage() {
                       classValue={classAttributes[key] || 0}
                       freeValue={form.allocatedAttributes[key] || 0}
                       totalValue={finalAttributes[key] || 0}
-                      max={attributeMax}
                       onChange={(value) => handleAttributeChange(key, value)}
                     />
                   ))}
@@ -521,13 +563,11 @@ export default function CreateCharacterPage() {
 
               <Card
                 title="Perícias Livres"
-                subtitle={`Distribua ${skillTotal} pontos. Máximo de ${skillMax} por perícia.`}
+                subtitle={`Base: ${baseSkillTotal}. ${form.specialTrait === "genio" ? "Gênio ativo: +6 extras e sem limite de 10." : `Máximo de ${baseSkillMax} por perícia.`}`}
               >
                 <div style={styles.progressBox}>
                   <span>Pontos gastos</span>
-                  <strong>
-                    {skillPointsSpent}/{skillTotal}
-                  </strong>
+                  <strong>{skillPointsSpent}/{skillTotal}</strong>
                 </div>
 
                 <div style={styles.skillSections}>
@@ -543,8 +583,10 @@ export default function CreateCharacterPage() {
                             classValue={classSkills[key] || 0}
                             freeValue={form.allocatedSkills[key] || 0}
                             passiveValue={passiveBonuses[key] || 0}
+                            heightValue={heightModifiers[key] || 0}
+                            weightValue={weightModifiers[key] || 0}
+                            ambidexterityValue={ambidexterityModifiers[key] || 0}
                             totalValue={finalSkillsPreview[key] || 0}
-                            max={skillMax}
                             onChange={(value) => handleSkillChange(key, value)}
                           />
                         ))}
@@ -572,47 +614,19 @@ export default function CreateCharacterPage() {
               </p>
 
               <div style={styles.sidebarStats}>
+                <SidebarMetric label="Atributos" value={`${attributePointsSpent}/${attributeTotal}`} />
+                <SidebarMetric label="Perícias" value={`${skillPointsSpent}/${skillTotal}`} />
                 <SidebarMetric
-                  label="Atributos livres"
-                  value={`${attributePointsSpent}/${attributeTotal}`}
+                  label="Traço"
+                  value={
+                    form.specialTrait
+                      ? form.specialTrait === "genio"
+                        ? "Gênio"
+                        : "Prodígio"
+                      : "Nenhum"
+                  }
                 />
-                <SidebarMetric
-                  label="Perícias livres"
-                  value={`${skillPointsSpent}/${skillTotal}`}
-                />
-                <SidebarMetric
-                  label="Habilidade"
-                  value={form.selectedAbility || "-"}
-                />
-              </div>
-            </div>
-
-            <div style={styles.sidebarCard}>
-              <h3 style={styles.sidebarSectionTitle}>Atributos finais</h3>
-              <div style={styles.compactList}>
-                {Object.entries(finalAttributes).map(([key, value]) => (
-                  <CompactRow
-                    key={key}
-                    label={attributeLabels[key]}
-                    value={value}
-                  />
-                ))}
-              </div>
-            </div>
-
-            <div style={styles.sidebarCard}>
-              <h3 style={styles.sidebarSectionTitle}>Perícias em destaque</h3>
-              <div style={styles.compactList}>
-                {Object.entries(finalSkillsPreview)
-                  .sort((a, b) => Number(b[1]) - Number(a[1]))
-                  .slice(0, 5)
-                  .map(([key, value]) => (
-                    <CompactRow
-                      key={key}
-                      label={skillLabels[key]}
-                      value={value}
-                    />
-                  ))}
+                <SidebarMetric label="Ambidestria" value={form.isAmbidextrous ? "Sim" : "Não"} />
               </div>
             </div>
           </aside>
@@ -651,7 +665,40 @@ function Field({ label, name, value, onChange, type = "text", required = false }
   );
 }
 
-function AttributeInputCard({ label, classValue, freeValue, totalValue, max, onChange }) {
+function TraitButton({ title, description, active, onClick, accent }) {
+  const accentMap = {
+    blue: "#2563eb",
+    green: "#059669",
+    purple: "#7c3aed",
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        ...styles.traitButton,
+        borderColor: active ? accentMap[accent] : "rgba(255,255,255,0.08)",
+        boxShadow: active ? `0 0 0 1px ${accentMap[accent]} inset` : "none",
+      }}
+    >
+      <div style={styles.traitTop}>
+        <span style={styles.traitTitle}>{title}</span>
+        <span
+          style={{
+            ...styles.traitBadge,
+            background: active ? accentMap[accent] : "rgba(255,255,255,0.08)",
+          }}
+        >
+          {active ? "Ativo" : "Inativo"}
+        </span>
+      </div>
+      <p style={styles.traitDescription}>{description}</p>
+    </button>
+  );
+}
+
+function AttributeInputCard({ label, classValue, freeValue, totalValue, onChange }) {
   return (
     <div style={styles.attributeCard}>
       <div>
@@ -665,7 +712,6 @@ function AttributeInputCard({ label, classValue, freeValue, totalValue, max, onC
         <input
           type="number"
           min={0}
-          max={max}
           value={freeValue}
           onChange={(e) => onChange(e.target.value)}
           style={styles.numberInput}
@@ -676,14 +722,26 @@ function AttributeInputCard({ label, classValue, freeValue, totalValue, max, onC
   );
 }
 
-function SkillInputCard({ label, classValue, freeValue, passiveValue, totalValue, max, onChange }) {
+function SkillInputCard({
+  label,
+  classValue,
+  freeValue,
+  passiveValue,
+  heightValue,
+  weightValue,
+  ambidexterityValue,
+  totalValue,
+  onChange,
+}) {
   return (
     <div style={styles.skillRowCard}>
       <div style={styles.skillRowTop}>
         <div>
           <div style={styles.skillName}>{label}</div>
           <div style={styles.skillMeta}>
-            Classe {formatModifier(classValue)} • Livre {formatModifier(freeValue)} • Atributos {formatModifier(passiveValue)}
+            Classe {formatModifier(classValue)} • Livre {formatModifier(freeValue)} •
+            Atributos {formatModifier(passiveValue)} • Altura {formatModifier(heightValue)} •
+            Peso {formatModifier(weightValue)} • Ambidestria {formatModifier(ambidexterityValue)}
           </div>
         </div>
 
@@ -691,7 +749,6 @@ function SkillInputCard({ label, classValue, freeValue, passiveValue, totalValue
           <input
             type="number"
             min={0}
-            max={max}
             value={freeValue}
             onChange={(e) => onChange(e.target.value)}
             style={styles.smallNumberInput}
@@ -731,15 +788,6 @@ function SidebarMetric({ label, value }) {
     <div style={styles.sidebarMetric}>
       <span style={styles.sidebarMetricLabel}>{label}</span>
       <strong style={styles.sidebarMetricValue}>{value}</strong>
-    </div>
-  );
-}
-
-function CompactRow({ label, value }) {
-  return (
-    <div style={styles.compactRow}>
-      <span style={styles.compactLabel}>{label}</span>
-      <strong style={styles.compactValue}>{value}</strong>
     </div>
   );
 }
@@ -793,20 +841,6 @@ const styles = {
     border: "1px solid rgba(255,255,255,0.08)",
     fontWeight: "bold",
   },
-  topActions: {
-    display: "flex",
-    gap: "12px",
-  },
-  secondaryButton: {
-    display: "inline-flex",
-    alignItems: "center",
-    background: "#2563eb",
-    color: "#fff",
-    textDecoration: "none",
-    padding: "12px 16px",
-    borderRadius: "14px",
-    fontWeight: "bold",
-  },
   layout: {
     display: "grid",
     gridTemplateColumns: "minmax(0, 1fr) 340px",
@@ -849,7 +883,6 @@ const styles = {
     marginBottom: 0,
     color: "#cbd5e1",
     fontSize: "17px",
-    maxWidth: "720px",
   },
   form: {
     display: "flex",
@@ -892,6 +925,43 @@ const styles = {
     color: "#f8fafc",
     outline: "none",
     fontSize: "15px",
+  },
+  traitsGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+    gap: "16px",
+  },
+  traitButton: {
+    textAlign: "left",
+    borderRadius: "18px",
+    border: "1px solid rgba(255,255,255,0.08)",
+    background: "#0b1220",
+    color: "#f8fafc",
+    padding: "18px",
+    cursor: "pointer",
+  },
+  traitTop: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: "12px",
+    marginBottom: "10px",
+  },
+  traitTitle: {
+    fontSize: "18px",
+    fontWeight: "bold",
+  },
+  traitBadge: {
+    borderRadius: "999px",
+    padding: "6px 10px",
+    fontSize: "12px",
+    fontWeight: "bold",
+  },
+  traitDescription: {
+    margin: 0,
+    color: "#cbd5e1",
+    lineHeight: 1.6,
+    fontSize: "14px",
   },
   classHeader: {
     marginBottom: "18px",
@@ -949,35 +1019,11 @@ const styles = {
     border: "1px solid rgba(255,255,255,0.05)",
   },
   abilityTop: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: "12px",
-    alignItems: "flex-start",
-    flexWrap: "wrap",
     marginBottom: "10px",
   },
   abilityName: {
     margin: 0,
     fontSize: "20px",
-  },
-  abilityBadges: {
-    display: "flex",
-    gap: "8px",
-    flexWrap: "wrap",
-  },
-  badgeMuted: {
-    background: "rgba(255,255,255,0.06)",
-    borderRadius: "999px",
-    padding: "6px 10px",
-    fontSize: "12px",
-    color: "#cbd5e1",
-  },
-  badgeBlue: {
-    background: "rgba(37,99,235,0.18)",
-    borderRadius: "999px",
-    padding: "6px 10px",
-    fontSize: "12px",
-    color: "#93c5fd",
   },
   abilityDescription: {
     margin: 0,
@@ -1155,31 +1201,6 @@ const styles = {
     fontSize: "13px",
   },
   sidebarMetricValue: {
-    fontSize: "15px",
-  },
-  sidebarSectionTitle: {
-    margin: 0,
-    marginBottom: "14px",
-    fontSize: "18px",
-  },
-  compactList: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "10px",
-  },
-  compactRow: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    background: "#0b1220",
-    borderRadius: "12px",
-    padding: "10px 12px",
-  },
-  compactLabel: {
-    color: "#cbd5e1",
-    fontSize: "14px",
-  },
-  compactValue: {
     fontSize: "15px",
   },
   submitButton: {

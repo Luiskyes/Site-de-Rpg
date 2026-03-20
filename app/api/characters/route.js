@@ -44,12 +44,39 @@ export async function POST(req) {
       allocatedAttributes,
       allocatedSkills,
       notes,
+      specialTrait,
+      isAmbidextrous,
     } = body;
 
     if (!name || !characterClass || !classId || !selectedAbility) {
       return NextResponse.json(
         { error: "Nome, classe e habilidade inicial são obrigatórios" },
         { status: 400 }
+      );
+    }
+
+    const allowedTraits = [null, "genio", "prodigio"];
+    if (!allowedTraits.includes(specialTrait ?? null)) {
+      return NextResponse.json(
+        { error: "Traço especial inválido" },
+        { status: 400 }
+      );
+    }
+
+    const classAlreadyTaken = await pool.query(
+      `
+      SELECT id, name
+      FROM "Character"
+      WHERE "classId" = $1
+      LIMIT 1
+      `,
+      [classId]
+    );
+
+    if (classAlreadyTaken.rowCount > 0) {
+      return NextResponse.json(
+        { error: "Essa classe já foi escolhida por outro jogador" },
+        { status: 409 }
       );
     }
 
@@ -74,12 +101,19 @@ export async function POST(req) {
         "allocatedSkills",
         "levelUpAttributes",
         "levelUpSkills",
+        "specialTrait",
+        "isAmbidextrous",
         "updatedAt"
       )
       VALUES (
-        $1, $2, $3, $4, 1, $5, $6, $7, $8, $9, $10, $11,
-        $12, $13, $14, $15,
-        '{}'::jsonb, '{}'::jsonb,
+        $1,$2,$3,$4,
+        1,
+        $5,$6,$7,$8,$9,$10,$11,
+        $12,$13,$14,$15,
+        '{}'::jsonb,
+        '{}'::jsonb,
+        $16,
+        $17,
         NOW()
       )
       RETURNING id, name, class
@@ -100,6 +134,8 @@ export async function POST(req) {
         classSkills ?? null,
         allocatedAttributes ?? null,
         allocatedSkills ?? null,
+        specialTrait ?? null,
+        Boolean(isAmbidextrous),
       ]
     );
 

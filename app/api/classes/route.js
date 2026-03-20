@@ -7,23 +7,29 @@ export async function GET() {
   try {
     const result = await pool.query(`
       SELECT
-        id,
-        name,
-        description,
-        "attributeBonuses",
-        "skillBonuses",
-        abilities
-      FROM "Class"
-      ORDER BY name ASC
+        c.id,
+        c.name,
+        c.description,
+        c."attributeBonuses",
+        c."skillBonuses",
+        c.abilities,
+        CASE
+          WHEN ch.id IS NOT NULL THEN true
+          ELSE false
+        END AS "isTaken"
+      FROM "Class" c
+      LEFT JOIN "Character" ch
+        ON ch."classId" = c.id
+      ORDER BY c.id ASC
     `);
 
     return NextResponse.json(result.rows, { status: 200 });
   } catch (err) {
-    console.error("LIST CLASSES ERROR:", err);
+    console.error("GET CLASSES ERROR:", err);
 
     return NextResponse.json(
       {
-        error: "Erro ao listar classes",
+        error: "Erro ao buscar classes",
         detail: err?.message ?? String(err),
       },
       { status: 500 }

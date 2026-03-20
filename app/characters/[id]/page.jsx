@@ -104,6 +104,7 @@ export default function CharacterPage() {
   const [sheet, setSheet] = useState(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [savingStamina, setSavingStamina] = useState(false);
 
   useEffect(() => {
     async function fetchSheet() {
@@ -114,7 +115,9 @@ export default function CharacterPage() {
       }
 
       try {
-        const response = await fetch(`/api/characters/${id}/sheet`);
+        const response = await fetch(`/api/characters/${id}/sheet`, {
+          cache: "no-store",
+        });
         const data = await response.json();
 
         if (!response.ok) {
@@ -123,7 +126,7 @@ export default function CharacterPage() {
         }
 
         setSheet(data);
-      } catch (err) {
+      } catch {
         setError("Erro inesperado ao carregar ficha");
       } finally {
         setLoading(false);
@@ -133,12 +136,65 @@ export default function CharacterPage() {
     fetchSheet();
   }, [id]);
 
-  const staminaText = useMemo(() => {
-    if (!sheet) return "-";
-    const current = sheet.staminaCurrent ?? "-";
-    const base = sheet.staminaBase ?? "-";
-    return `${current} / ${base}`;
+  const staminaPercent = useMemo(() => {
+    if (!sheet?.staminaBase || !sheet?.staminaCurrent) return 0;
+    return Math.max(
+      0,
+      Math.min(100, Math.round((sheet.staminaCurrent / sheet.staminaBase) * 100))
+    );
   }, [sheet]);
+
+  async function updateStamina(nextValue) {
+  if (!sheet || savingStamina) return;
+
+  setSavingStamina(true);
+
+  try {
+    const response = await fetch(`/api/characters/${sheet.id}/stamina`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        staminaCurrent: nextValue,
+      }),
+    });
+
+    const text = await response.text();
+
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = { error: text || "Resposta inválida do servidor" };
+    }
+
+    if (!response.ok) {
+      alert(data.error || data.detail || "Erro ao atualizar fôlego");
+      return;
+    }
+
+    setSheet((prev) => ({
+      ...prev,
+      staminaCurrent: data.staminaCurrent,
+      staminaBase: data.staminaBase,
+    }));
+  } catch (err) {
+    alert(`Erro inesperado ao atualizar o fôlego: ${err.message}`);
+  } finally {
+    setSavingStamina(false);
+  }
+}
+
+  function handleDecreaseStamina() {
+    if (!sheet) return;
+    updateStamina((sheet.staminaCurrent ?? 0) - 1);
+  }
+
+  function handleIncreaseStamina() {
+    if (!sheet) return;
+    updateStamina((sheet.staminaCurrent ?? 0) + 1);
+  }
 
   if (loading) {
     return (
@@ -171,9 +227,7 @@ export default function CharacterPage() {
           </Link>
 
           <div style={styles.topActions}>
-            <Link href="/characters/create" style={styles.secondaryButton}>
-              Nova ficha
-            </Link>
+            <span style={styles.readOnlyBadge}>Ficha visual</span>
           </div>
         </header>
 
@@ -198,20 +252,71 @@ export default function CharacterPage() {
           <InfoCard label="Idade" value={sheet.age ?? "-"} />
           <InfoCard label="Altura" value={sheet.heightCm ? `${sheet.heightCm} cm` : "-"} />
           <InfoCard label="Peso" value={sheet.weightKg ? `${sheet.weightKg} kg` : "-"} />
-          <InfoCard label="Fôlego" value={staminaText} />
+        </section>
+
+        <section style={styles.staminaSection}>
+          <div style={styles.staminaHeader}>
+            <div>
+              <h2 style={styles.sectionTitle}>Fôlego</h2>
+              <p style={styles.sectionSubtitle}>Ajuste o fôlego atual do personagem</p>
+            </div>
+
+            <div style={styles.staminaValueBox}>
+              {sheet.staminaCurrent ?? 0} / {sheet.staminaBase ?? 0}
+            </div>
+          </div>
+
+          <div style={styles.staminaBarOuter}>
+            <div
+              style={{
+                ...styles.staminaBarInner,
+                width: `${staminaPercent}%`,
+              }}
+            />
+          </div>
+
+          <div style={styles.staminaControls}>
+            <button
+              type="button"
+              onClick={handleDecreaseStamina}
+              style={styles.staminaButton}
+              disabled={savingStamina}
+            >
+              -1
+            </button>
+
+            <button
+              type="button"
+              onClick={handleIncreaseStamina}
+              style={styles.staminaButton}
+              disabled={savingStamina}
+            >
+              +1
+            </button>
+          </div>
         </section>
 
         <section style={styles.section}>
           <div style={styles.sectionHeader}>
             <h2 style={styles.sectionTitle}>Atributos</h2>
-            <p style={styles.sectionSubtitle}>Valores finais do personagem</p>
+            <p style={styles.sectionSubtitle}>Valores finais e composição</p>
           </div>
 
-          <div style={styles.attributesGrid}>
+          <div style={styles.attributeList}>
             {Object.entries(sheet.finalAttributes || {}).map(([key, value]) => (
-              <div key={key} style={styles.attributeCard}>
-                <span style={styles.attributeName}>{attributeLabels[key] || key}</span>
-                <span style={styles.attributeValue}>{value ?? 0}</span>
+              <div key={key} style={styles.attributeRow}>
+                <div style={styles.attributeRowLeft}>
+                  <span style={styles.attributeRowName}>
+                    {attributeLabels[key] || key}
+                  </span>
+                  <small style={styles.attributeRowMeta}>
+                    Classe {sheet.classAttributes?.[key] ?? 0} • Livre {sheet.allocatedAttributes?.[key] ?? 0} • Evolução {sheet.levelUpAttributes?.[key] ?? 0}
+                  </small>
+                </div>
+
+                <div style={styles.attributeValueBadge}>
+                  {value ?? 0}
+                </div>
               </div>
             ))}
           </div>
@@ -220,7 +325,7 @@ export default function CharacterPage() {
         <section style={styles.section}>
           <div style={styles.sectionHeader}>
             <h2 style={styles.sectionTitle}>Perícias</h2>
-            <p style={styles.sectionSubtitle}>Organizadas de forma simples e legível</p>
+            <p style={styles.sectionSubtitle}>Leitura simples e visual</p>
           </div>
 
           <div style={styles.skillsSections}>
@@ -398,14 +503,14 @@ const styles = {
     display: "flex",
     gap: "12px",
   },
-  secondaryButton: {
+  readOnlyBadge: {
     display: "inline-flex",
     alignItems: "center",
-    background: "#2563eb",
-    color: "#fff",
-    textDecoration: "none",
+    background: "rgba(255,255,255,0.06)",
+    color: "#cbd5e1",
     padding: "12px 16px",
     borderRadius: "14px",
+    border: "1px solid rgba(255,255,255,0.08)",
     fontWeight: "bold",
   },
   heroCard: {
@@ -478,6 +583,55 @@ const styles = {
     fontSize: "26px",
     fontWeight: "bold",
   },
+  staminaSection: {
+    background: "#111827",
+    borderRadius: "24px",
+    padding: "24px",
+    border: "1px solid rgba(255,255,255,0.06)",
+  },
+  staminaHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: "16px",
+    marginBottom: "18px",
+  },
+  staminaValueBox: {
+    minWidth: "110px",
+    textAlign: "center",
+    background: "#0b1220",
+    borderRadius: "16px",
+    padding: "14px 16px",
+    fontWeight: "bold",
+    fontSize: "22px",
+  },
+  staminaBarOuter: {
+    width: "100%",
+    height: "18px",
+    borderRadius: "999px",
+    background: "rgba(255,255,255,0.08)",
+    overflow: "hidden",
+    marginBottom: "16px",
+  },
+  staminaBarInner: {
+    height: "100%",
+    borderRadius: "999px",
+    background: "linear-gradient(90deg, #22c55e, #16a34a)",
+    transition: "width 0.2s ease",
+  },
+  staminaControls: {
+    display: "flex",
+    gap: "12px",
+  },
+  staminaButton: {
+    border: "none",
+    borderRadius: "14px",
+    padding: "12px 18px",
+    background: "#2563eb",
+    color: "#fff",
+    fontWeight: "bold",
+    cursor: "pointer",
+  },
   section: {
     background: "#111827",
     borderRadius: "24px",
@@ -496,31 +650,48 @@ const styles = {
     marginBottom: 0,
     color: "#94a3b8",
   },
-  attributesGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-    gap: "16px",
-  },
-  attributeCard: {
-    background: "#0b1220",
-    borderRadius: "18px",
-    padding: "18px",
+  attributeList: {
     display: "flex",
     flexDirection: "column",
-    gap: "8px",
+    gap: "12px",
+  },
+  attributeRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: "16px",
+    background: "#0b1220",
+    borderRadius: "16px",
+    padding: "14px 16px",
     border: "1px solid rgba(255,255,255,0.05)",
+  },
+  attributeRowLeft: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "6px",
+    flex: 1,
+  },
+  attributeRowName: {
+    fontSize: "16px",
+    fontWeight: "bold",
+    color: "#f8fafc",
+  },
+  attributeRowMeta: {
+    color: "#94a3b8",
+    fontSize: "12px",
+    lineHeight: 1.5,
+  },
+  attributeValueBadge: {
+    minWidth: "56px",
+    height: "56px",
+    borderRadius: "16px",
+    background: "#1d4ed8",
+    display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    minHeight: "120px",
-  },
-  attributeName: {
-    color: "#cbd5e1",
-    fontSize: "15px",
-  },
-  attributeValue: {
-    fontSize: "34px",
+    fontSize: "22px",
     fontWeight: "bold",
-    lineHeight: 1,
+    flexShrink: 0,
   },
   skillsSections: {
     display: "grid",

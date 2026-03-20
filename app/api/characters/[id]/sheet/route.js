@@ -11,7 +11,10 @@ export async function GET(req, context) {
 
     if (!Number.isInteger(id) || id <= 0) {
       return NextResponse.json(
-        { error: "ID de personagem inválido", received: rawId },
+        {
+          error: "ID de personagem inválido",
+          received: rawId,
+        },
         { status: 400 }
       );
     }
@@ -24,7 +27,10 @@ export async function GET(req, context) {
         class,
         "classId",
         "selectedAbility",
+        "specialTrait",
+        "isAmbidextrous",
         level,
+        notes,
         age,
         "heightCm",
         "weightKg",
@@ -35,9 +41,13 @@ export async function GET(req, context) {
         "allocatedAttributes",
         "allocatedSkills",
         "levelUpAttributes",
-        "levelUpSkills"
+        "levelUpSkills",
+        "ownerId",
+        "createdAt",
+        "updatedAt"
       FROM "Character"
       WHERE id = $1
+      LIMIT 1
       `,
       [id]
     );

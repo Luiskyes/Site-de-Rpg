@@ -8,7 +8,7 @@ export async function GET(req) {
   try {
     const auth = await requireMaster(req);
 
-    if (auth.error) {
+    if (auth?.error) {
       return NextResponse.json(
         { error: auth.error },
         { status: auth.status }
@@ -23,17 +23,14 @@ export async function GET(req) {
         c.level,
         c."staminaBase",
         c."staminaCurrent",
-        c."selectedAbility",
-        c."createdAt",
-        c."updatedAt",
         c."ownerId",
         u.email AS "ownerEmail"
       FROM "Character" c
       INNER JOIN users u ON u.id = c."ownerId"
-      ORDER BY c."updatedAt" DESC, c.id DESC
+      ORDER BY c.id DESC
     `);
 
-    return NextResponse.json(result.rows, { status: 200 });
+    return NextResponse.json(result.rows || [], { status: 200 });
   } catch (err) {
     console.error("MASTER CHARACTERS ERROR:", err);
 

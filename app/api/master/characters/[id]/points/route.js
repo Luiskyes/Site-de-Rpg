@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
-import { pool } from "../../../../../lib/db";
-import { verifySessionCookie } from "../../../../../lib/auth";
-import { calculateCharacterSheet } from "../../../../../lib/character-calculations";
+import { pool } from "../../../../../../lib/db";
+import { requireMaster } from "../../../../../../lib/master-auth";
 
 export const runtime = "nodejs";
 
@@ -17,14 +16,14 @@ async function getIdFromParams(paramsPromise) {
   return id;
 }
 
-export async function GET(req, { params }) {
+export async function PATCH(req, { params }) {
   try {
-    const userId = await verifySessionCookie(req);
+    const auth = await requireMaster(req);
 
-    if (!userId) {
+    if (auth?.error) {
       return NextResponse.json(
-        { error: "Não autenticado" },
-        { status: 401 }
+        { error: auth.error },
+        { status: auth.status }
       );
     }
 
@@ -37,14 +36,26 @@ export async function GET(req, { params }) {
       );
     }
 
+    const body = await req.json();
+    const amount = Number(body.amount);
+
+    if (!Number.isFinite(amount)) {
+      return NextResponse.json(
+        { error: "Quantidade inválida." },
+        { status: 400 }
+      );
+    }
+
     const result = await pool.query(
       `
-      SELECT *
-      FROM "Character"
-      WHERE id = $1
-      LIMIT 1
+      UPDATE "Character"
+      SET
+        "progressPoints" = GREATEST(0, COALESCE("progressPoints", 0) + $1),
+        "updatedAt" = NOW()
+      WHERE id = $2
+      RETURNING id, name, "progressPoints"
       `,
-      [id]
+      [amount, id]
     );
 
     if (result.rowCount === 0) {
@@ -54,24 +65,13 @@ export async function GET(req, { params }) {
       );
     }
 
-    const character = result.rows[0];
-
-    if (Number(character.ownerId) !== Number(userId)) {
-      return NextResponse.json(
-        { error: "Acesso negado" },
-        { status: 403 }
-      );
-    }
-
-    const sheet = calculateCharacterSheet(character);
-
-    return NextResponse.json(sheet, { status: 200 });
+    return NextResponse.json(result.rows[0], { status: 200 });
   } catch (err) {
-    console.error("CHARACTER SHEET ERROR:", err);
+    console.error("MASTER ADD POINTS ERROR:", err);
 
     return NextResponse.json(
       {
-        error: "Erro ao buscar ficha",
+        error: "Erro ao alterar pontos",
         detail: err?.message ?? String(err),
       },
       { status: 500 }

@@ -11,6 +11,8 @@ import { getAbilitiesByClass } from "../../../../../lib/ability-book";
 
 export const runtime = "nodejs";
 
+const MAX_CUSTOM_ABILITY_NAME_LENGTH = 80;
+
 async function getIdFromParams(paramsPromise) {
   const resolved = await paramsPromise;
   const rawId = Array.isArray(resolved?.id) ? resolved.id[0] : resolved?.id;
@@ -27,20 +29,52 @@ function normalizeObject(input, template) {
   const result = { ...template };
 
   for (const key of Object.keys(template)) {
-    result[key] = Math.max(0, Number(input?.[key] || 0));
+    const value = Number(input?.[key] || 0);
+
+    if (!Number.isFinite(value) || value < 0) {
+      result[key] = 0;
+      continue;
+    }
+
+    result[key] = Math.floor(value);
   }
 
   return result;
 }
 
 function sumValues(obj) {
-  return Object.values(obj || {}).reduce((acc, value) => acc + Number(value || 0), 0);
+  return Object.values(obj || {}).reduce(
+    (acc, value) => acc + Number(value || 0),
+    0
+  );
 }
 
 function sanitizeAbilityArray(value) {
   if (!Array.isArray(value)) return [];
-  return value
-    .map((item) => String(item || "").trim())
+
+  const unique = [];
+  const seen = new Set();
+
+  for (const item of value) {
+    const normalized = String(item || "").trim();
+
+    if (!normalized) continue;
+
+    const key = normalized.toLowerCase();
+    if (seen.has(key)) continue;
+
+    seen.add(key);
+    unique.push(normalized);
+  }
+
+  return unique;
+}
+
+function sanitizeCustomAbilityArray(value) {
+  const abilities = sanitizeAbilityArray(value);
+
+  return abilities
+    .map((item) => item.slice(0, MAX_CUSTOM_ABILITY_NAME_LENGTH).trim())
     .filter(Boolean);
 }
 
@@ -70,10 +104,10 @@ export async function PATCH(req, { params }) {
 
     const existingResult = await pool.query(
       `
-      SELECT *
-      FROM "Character"
-      WHERE id = $1
-      LIMIT 1
+        SELECT *
+        FROM "Character"
+        WHERE id = $1
+        LIMIT 1
       `,
       [id]
     );
@@ -90,15 +124,31 @@ export async function PATCH(req, { params }) {
 
     const body = await req.json();
 
-    const nextLevelUpAttributes = normalizeObject(body.levelUpAttributes, EMPTY_ATTRIBUTES);
-    const nextLevelUpSkills = normalizeObject(body.levelUpSkills, EMPTY_SKILLS);
-    const nextBoughtAbilities = sanitizeAbilityArray(body.boughtAbilities);
-    const nextCustomAbilities = sanitizeAbilityArray(body.customAbilities);
+    const nextLevelUpAttributes = normalizeObject(
+      body?.levelUpAttributes,
+      EMPTY_ATTRIBUTES
+    );
 
-    const savedLevelUpAttributes = normalizeObject(character.levelUpAttributes, EMPTY_ATTRIBUTES);
-    const savedLevelUpSkills = normalizeObject(character.levelUpSkills, EMPTY_SKILLS);
+    const nextLevelUpSkills = normalizeObject(
+      body?.levelUpSkills,
+      EMPTY_SKILLS
+    );
+
+    const nextBoughtAbilities = sanitizeAbilityArray(body?.boughtAbilities);
+    const nextCustomAbilities = sanitizeCustomAbilityArray(body?.customAbilities);
+
+    const savedLevelUpAttributes = normalizeObject(
+      character.levelUpAttributes,
+      EMPTY_ATTRIBUTES
+    );
+
+    const savedLevelUpSkills = normalizeObject(
+      character.levelUpSkills,
+      EMPTY_SKILLS
+    );
+
     const savedBoughtAbilities = sanitizeAbilityArray(character.boughtAbilities);
-    const savedCustomAbilities = sanitizeAbilityArray(character.customAbilities);
+    const savedCustomAbilities = sanitizeCustomAbilityArray(character.customAbilities);
 
     if (!everyValueAtLeast(nextLevelUpAttributes, savedLevelUpAttributes, EMPTY_ATTRIBUTES)) {
       return NextResponse.json(
@@ -128,7 +178,20 @@ export async function PATCH(req, { params }) {
       );
     }
 
-    const allowedClassAbilities = getAbilitiesByClass(character.class);
+    const hasTooLongCustomAbility = nextCustomAbilities.some(
+      (ability) => ability.length > MAX_CUSTOM_ABILITY_NAME_LENGTH
+    );
+
+    if (hasTooLongCustomAbility) {
+      return NextResponse.json(
+        {
+          error: `Cada habilidade criada pode ter no máximo ${MAX_CUSTOM_ABILITY_NAME_LENGTH} caracteres.`,
+        },
+        { status: 400 }
+      );
+    }
+
+    const allowedClassAbilities = getAbilitiesByClass(character.class) || [];
 
     const hasInvalidBoughtAbility = nextBoughtAbilities.some(
       (ability) => !allowedClassAbilities.includes(ability)
@@ -146,9 +209,7 @@ export async function PATCH(req, { params }) {
 
     if (spentSkillUpgrades > spentAttributeUpgrades) {
       return NextResponse.json(
-        {
-          error: "Perícias compradas não podem ultrapassar atributos comprados.",
-        },
+        { error: "Perícias compradas não podem ultrapassar atributos comprados." },
         { status: 400 }
       );
     }
@@ -172,17 +233,17 @@ export async function PATCH(req, { params }) {
 
     const updateResult = await pool.query(
       `
-      UPDATE "Character"
-      SET
-        "levelUpAttributes" = $1,
-        "levelUpSkills" = $2,
-        "spentAttributeUpgrades" = $3,
-        "spentSkillUpgrades" = $4,
-        "boughtAbilities" = $5,
-        "customAbilities" = $6,
-        "updatedAt" = NOW()
-      WHERE id = $7
-      RETURNING *
+        UPDATE "Character"
+        SET
+          "levelUpAttributes" = $1,
+          "levelUpSkills" = $2,
+          "spentAttributeUpgrades" = $3,
+          "spentSkillUpgrades" = $4,
+          "boughtAbilities" = $5,
+          "customAbilities" = $6,
+          "updatedAt" = NOW()
+        WHERE id = $7
+        RETURNING *
       `,
       [
         nextLevelUpAttributes,

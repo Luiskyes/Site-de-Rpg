@@ -38,10 +38,10 @@ export async function GET(req, { params }) {
 
     const result = await pool.query(
       `
-      SELECT *
-      FROM "Character"
-      WHERE id = $1
-      LIMIT 1
+        SELECT *
+        FROM "Character"
+        WHERE id = $1
+        LIMIT 1
       `,
       [id]
     );
@@ -91,34 +91,34 @@ export async function PATCH(req, { params }) {
 
     const result = await pool.query(
       `
-      UPDATE "Character"
-      SET
-        name = $1,
-        class = $2,
-        "classId" = $3,
-        "selectedAbility" = $4,
-        notes = $5,
-        age = $6,
-        "heightCm" = $7,
-        "weightKg" = $8,
-        "staminaBase" = $9,
-        "staminaCurrent" = $10,
-        "classAttributes" = $11,
-        "classSkills" = $12,
-        "allocatedAttributes" = $13,
-        "allocatedSkills" = $14,
-        "levelUpAttributes" = $15,
-        "levelUpSkills" = $16,
-        "specialTrait" = $17,
-        "isAmbidextrous" = $18,
-        "progressPoints" = $19,
-        "spentAttributeUpgrades" = $20,
-        "spentSkillUpgrades" = $21,
-        "boughtAbilities" = $22,
-        "customAbilities" = $23,
-        "updatedAt" = NOW()
-      WHERE id = $24
-      RETURNING *
+        UPDATE "Character"
+        SET
+          name = $1,
+          class = $2,
+          "classId" = $3,
+          "selectedAbility" = $4,
+          notes = $5,
+          age = $6,
+          "heightCm" = $7,
+          "weightKg" = $8,
+          "staminaBase" = $9,
+          "staminaCurrent" = $10,
+          "classAttributes" = $11,
+          "classSkills" = $12,
+          "allocatedAttributes" = $13,
+          "allocatedSkills" = $14,
+          "levelUpAttributes" = $15,
+          "levelUpSkills" = $16,
+          "specialTrait" = $17,
+          "isAmbidextrous" = $18,
+          "progressPoints" = $19,
+          "spentAttributeUpgrades" = $20,
+          "spentSkillUpgrades" = $21,
+          "boughtAbilities" = $22,
+          "customAbilities" = $23,
+          "updatedAt" = NOW()
+        WHERE id = $24
+        RETURNING *
       `,
       [
         body.name ?? "",
@@ -162,6 +162,63 @@ export async function PATCH(req, { params }) {
     return NextResponse.json(
       {
         error: "Erro ao atualizar ficha",
+        detail: err?.message ?? String(err),
+      },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(req, { params }) {
+  try {
+    const auth = await requireMaster(req);
+
+    if (auth?.error) {
+      return NextResponse.json(
+        { error: auth.error },
+        { status: auth.status }
+      );
+    }
+
+    const id = await getIdFromParams(params);
+
+    if (!id) {
+      return NextResponse.json(
+        { error: "ID inválido" },
+        { status: 400 }
+      );
+    }
+
+    const result = await pool.query(
+      `
+        DELETE FROM "Character"
+        WHERE id = $1
+        RETURNING id, name
+      `,
+      [id]
+    );
+
+    if (result.rowCount === 0) {
+      return NextResponse.json(
+        { error: "Ficha não encontrada" },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json(
+      {
+        success: true,
+        message: "Ficha excluída com sucesso.",
+        deletedCharacter: result.rows[0],
+      },
+      { status: 200 }
+    );
+  } catch (err) {
+    console.error("MASTER CHARACTER DELETE ERROR:", err);
+
+    return NextResponse.json(
+      {
+        error: "Erro ao excluir ficha",
         detail: err?.message ?? String(err),
       },
       { status: 500 }

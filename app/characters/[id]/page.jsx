@@ -4,151 +4,20 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { getAbilitiesByClass } from "../../../lib/ability-book";
-
-const EMPTY_ATTRIBUTES = {
-  potencia: 0,
-  tecnica: 0,
-  agilidade: 0,
-  velocidade: 0,
-  ego: 0,
-};
-
-const EMPTY_SKILLS = {
-  corpoACorpo: 0,
-  cabecio: 0,
-  chute: 0,
-  pontaria: 0,
-  dominio: 0,
-  passe: 0,
-  drible: 0,
-  rouboDeBola: 0,
-  acrobacias: 0,
-  defesa: 0,
-  reflexos: 0,
-  furtividade: 0,
-  corridaLongaDistancia: 0,
-  explosao: 0,
-  ritmoDeJogo: 0,
-  intuicao: 0,
-  intimidacao: 0,
-  presenca: 0,
-  lideranca: 0,
-  enganacao: 0,
-};
-
-const attributeLabels = {
-  potencia: "Potência",
-  tecnica: "Técnica",
-  agilidade: "Agilidade",
-  velocidade: "Velocidade",
-  ego: "Ego",
-};
-
-const skillLabels = {
-  corpoACorpo: "Corpo a Corpo",
-  cabecio: "Cabeceio",
-  chute: "Chute",
-  pontaria: "Pontaria",
-  dominio: "Domínio",
-  passe: "Passe",
-  drible: "Drible",
-  rouboDeBola: "Roubo de Bola",
-  acrobacias: "Acrobacias",
-  defesa: "Defesa",
-  reflexos: "Reflexos",
-  furtividade: "Furtividade",
-  corridaLongaDistancia: "Corrida Longa Distância",
-  explosao: "Explosão",
-  ritmoDeJogo: "Ritmo de Jogo",
-  intuicao: "Intuição",
-  intimidacao: "Intimidação",
-  presenca: "Presença",
-  lideranca: "Liderança",
-  enganacao: "Enganação",
-};
-
-const skillGroups = [
-  {
-    title: "Potência",
-    keys: ["corpoACorpo", "cabecio", "chute"],
-    labels: {
-      corpoACorpo: "Corpo a Corpo",
-      cabecio: "Cabeceio",
-      chute: "Chute",
-    },
-  },
-  {
-    title: "Técnica",
-    keys: ["pontaria", "dominio", "passe", "drible", "rouboDeBola"],
-    labels: {
-      pontaria: "Pontaria",
-      dominio: "Domínio",
-      passe: "Passe",
-      drible: "Drible",
-      rouboDeBola: "Roubo de Bola",
-    },
-  },
-  {
-    title: "Agilidade",
-    keys: ["acrobacias", "defesa", "reflexos", "furtividade"],
-    labels: {
-      acrobacias: "Acrobacias",
-      defesa: "Defesa",
-      reflexos: "Reflexos",
-      furtividade: "Furtividade",
-    },
-  },
-  {
-    title: "Velocidade",
-    keys: ["corridaLongaDistancia", "explosao", "ritmoDeJogo"],
-    labels: {
-      corridaLongaDistancia: "Corrida Longa Distância",
-      explosao: "Explosão",
-      ritmoDeJogo: "Ritmo de Jogo",
-    },
-  },
-  {
-    title: "Ego",
-    keys: ["intuicao", "intimidacao", "presenca", "lideranca", "enganacao"],
-    labels: {
-      intuicao: "Intuição",
-      intimidacao: "Intimidação",
-      presenca: "Presença",
-      lideranca: "Liderança",
-      enganacao: "Enganação",
-    },
-  },
-];
-
-async function safeJson(response) {
-  try {
-    const text = await response.text();
-    if (!text || !text.trim()) return null;
-    return JSON.parse(text);
-  } catch {
-    return null;
-  }
-}
-
-function formatKey(key) {
-  return skillLabels[key] || key;
-}
-
-function formatModifier(value) {
-  if (!value) return "0";
-  return value > 0 ? `+${value}` : String(value);
-}
-
-function getStaminaFillStyle(percent) {
-  if (percent > 60) return "linear-gradient(90deg, #16a34a, #4ade80)";
-  if (percent > 30) return "linear-gradient(90deg, #ca8a04, #facc15)";
-  if (percent > 10) return "linear-gradient(90deg, #ea580c, #fb923c)";
-  return "linear-gradient(90deg, #b91c1c, #ef4444)";
-}
-
-function sumValues(obj) {
-  return Object.values(obj || {}).reduce((acc, value) => acc + Number(value || 0), 0);
-}
+import {
+  EMPTY_ATTRIBUTES,
+  EMPTY_SKILLS,
+  attributeLabels,
+  skillLabels,
+  skillGroups,
+} from "../../../lib/character-sheet/constants";
+import {
+  safeJson,
+  formatKey,
+  formatModifier,
+  getStaminaFillStyle,
+  sumValues,
+} from "../../../lib/character-sheet/utils";
 
 export default function CharacterPage() {
   const params = useParams();
@@ -238,6 +107,10 @@ export default function CharacterPage() {
       Math.min(100, Math.round((sheet.staminaCurrent / sheet.staminaBase) * 100))
     );
   }, [sheet]);
+
+  const availableClassAbilities = useMemo(() => {
+    return getAbilitiesByClass(sheet?.class);
+  }, [sheet?.class]);
 
   const progressPreview = useMemo(() => {
     const spentAttributeUpgrades = sumValues(progressForm.levelUpAttributes);
@@ -330,7 +203,7 @@ export default function CharacterPage() {
   function addBoughtAbility() {
     const name = String(progressForm.newBoughtAbility || "").trim();
     if (!name) return;
-    if (!getAbilitiesByClass(sheet?.class).includes(name)) return;
+    if (!availableClassAbilities.includes(name)) return;
     if (progressForm.boughtAbilities.includes(name)) return;
     if (progressPreview.remaining < progressPreview.existingAbilityCost) return;
 
@@ -383,6 +256,7 @@ export default function CharacterPage() {
         headers: {
           "Content-Type": "application/json",
         },
+        credentials: "include",
         body: JSON.stringify({
           staminaCurrent: nextValue,
         }),
@@ -395,22 +269,7 @@ export default function CharacterPage() {
         return;
       }
 
-      const refreshedResponse = await fetch(`/api/characters/${sheet.id}/sheet`, {
-        cache: "no-store",
-        credentials: "include",
-      });
-
-      const refreshedSheet = await safeJson(refreshedResponse);
-
-      if (refreshedResponse.ok && refreshedSheet) {
-        setSheet(refreshedSheet);
-      } else {
-        setSheet((prev) => ({
-          ...prev,
-          staminaCurrent: data.staminaCurrent,
-          staminaBase: data.staminaBase,
-        }));
-      }
+      setSheet(data);
     } catch (err) {
       alert(`Erro inesperado ao atualizar o fôlego: ${err.message}`);
     } finally {
@@ -749,8 +608,13 @@ export default function CharacterPage() {
                           }
                           style={styles.input}
                         >
-                          <option value="">Selecione uma habilidade</option>
-                          {(getAbilitiesByClass(sheet?.class) || []).map((ability) => (
+                          <option value="">
+                            {availableClassAbilities.length
+                              ? "Selecione uma habilidade"
+                              : "Nenhuma habilidade encontrada para esta classe"}
+                          </option>
+
+                          {availableClassAbilities.map((ability) => (
                             <option key={ability} value={ability}>
                               {ability}
                             </option>
@@ -760,7 +624,10 @@ export default function CharacterPage() {
                         <button
                           type="button"
                           onClick={addBoughtAbility}
-                          disabled={progressPreview.remaining < progressPreview.existingAbilityCost}
+                          disabled={
+                            progressPreview.remaining < progressPreview.existingAbilityCost ||
+                            availableClassAbilities.length === 0
+                          }
                           style={styles.miniActionButton}
                         >
                           Adicionar

@@ -22,27 +22,21 @@ export async function GET(req, { params }) {
     const userId = await verifySessionCookie(req);
 
     if (!userId) {
-      return NextResponse.json(
-        { error: "Não autenticado" },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
     }
 
     const id = await getIdFromParams(params);
 
     if (!id) {
-      return NextResponse.json(
-        { error: "ID inválido" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "ID inválido" }, { status: 400 });
     }
 
     const result = await pool.query(
       `
-      SELECT *
-      FROM "Character"
-      WHERE id = $1
-      LIMIT 1
+        SELECT *
+        FROM "Character"
+        WHERE id = $1
+        LIMIT 1
       `,
       [id]
     );
@@ -57,10 +51,7 @@ export async function GET(req, { params }) {
     const character = result.rows[0];
 
     if (Number(character.ownerId) !== Number(userId)) {
-      return NextResponse.json(
-        { error: "Acesso negado" },
-        { status: 403 }
-      );
+      return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
     }
 
     const sheet = calculateCharacterSheet(character);

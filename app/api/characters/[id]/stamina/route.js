@@ -1,49 +1,49 @@
 import { NextResponse } from "next/server";
 import { pool } from "../../../../../lib/db";
 import { verifySessionCookie } from "../../../../../lib/auth";
+import { calculateCharacterSheet } from "../../../../../lib/character-calculations";
 
 export const runtime = "nodejs";
 
-export async function PATCH(req, context) {
+async function getIdFromParams(paramsPromise) {
+  const resolved = await paramsPromise;
+  const rawId = Array.isArray(resolved?.id) ? resolved.id[0] : resolved?.id;
+  const id = Number(rawId);
+
+  if (!Number.isInteger(id) || id <= 0) {
+    return null;
+  }
+
+  return id;
+}
+
+export async function PATCH(req, { params }) {
   try {
     const userId = await verifySessionCookie(req);
 
     if (!userId) {
-      return NextResponse.json(
-        { error: "Não autenticado" },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
     }
 
-    const { id: rawId } = await context.params;
-    const id = Number(rawId);
+    const id = await getIdFromParams(params);
 
-    if (!Number.isInteger(id) || id <= 0) {
-      return NextResponse.json(
-        {
-          error: "ID inválido",
-          received: rawId,
-        },
-        { status: 400 }
-      );
+    if (!id) {
+      return NextResponse.json({ error: "ID inválido" }, { status: 400 });
     }
 
     const body = await req.json();
     const staminaCurrent = Number(body?.staminaCurrent);
 
     if (!Number.isFinite(staminaCurrent)) {
-      return NextResponse.json(
-        { error: "Fôlego inválido" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Fôlego inválido" }, { status: 400 });
     }
 
     const existing = await pool.query(
       `
-      SELECT id, "ownerId", "staminaBase"
-      FROM "Character"
-      WHERE id = $1
-      LIMIT 1
+        SELECT *
+        FROM "Character"
+        WHERE id = $1
+        LIMIT 1
       `,
       [id]
     );
@@ -69,16 +69,19 @@ export async function PATCH(req, context) {
 
     const result = await pool.query(
       `
-      UPDATE "Character"
-      SET "staminaCurrent" = $1,
-          "updatedAt" = NOW()
-      WHERE id = $2
-      RETURNING id, "staminaCurrent", "staminaBase"
+        UPDATE "Character"
+        SET "staminaCurrent" = $1,
+            "updatedAt" = NOW()
+        WHERE id = $2
+        RETURNING *
       `,
       [clamped, id]
     );
 
-    return NextResponse.json(result.rows[0], { status: 200 });
+    const updatedCharacter = result.rows[0];
+    const sheet = calculateCharacterSheet(updatedCharacter);
+
+    return NextResponse.json(sheet, { status: 200 });
   } catch (err) {
     console.error("PATCH STAMINA ERROR:", err);
 

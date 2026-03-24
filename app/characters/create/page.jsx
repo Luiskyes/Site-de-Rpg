@@ -141,6 +141,9 @@ export default function CreateCharacterPage() {
     isAmbidextrous: false,
   });
 
+  const [customClassAttributes, setCustomClassAttributes] = useState({ ...EMPTY_ATTRIBUTES });
+  const [customClassSkills, setCustomClassSkills] = useState([]);
+
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [saving, setSaving] = useState(false);
@@ -172,13 +175,81 @@ export default function CreateCharacterPage() {
     return classes.find((item) => String(item.id) === String(form.classId)) || null;
   }, [classes, form.classId]);
 
-  const classAttributes = useMemo(() => {
-    return { ...EMPTY_ATTRIBUTES, ...(selectedClassData?.attributeBonuses ?? {}) };
+  const uniqueSelectedClassAbilities = useMemo(() => {
+    const rawAbilities = Array.isArray(selectedClassData?.abilities)
+      ? selectedClassData.abilities
+      : [];
+
+    const seen = new Set();
+
+    return rawAbilities
+      .map((ability, index) => {
+        const name =
+          typeof ability === "string"
+            ? ability.trim()
+            : String(ability?.name || "").trim();
+
+        if (!name) return null;
+
+        const normalized = name.toLowerCase();
+        if (seen.has(normalized)) return null;
+
+        seen.add(normalized);
+
+        return {
+          id: `${normalized}-${index}`,
+          name,
+        };
+      })
+      .filter(Boolean);
   }, [selectedClassData]);
 
+  const isCustomAttributeClass =
+    selectedClassData?.attributesMode === "custom_pool";
+
+  const isCustomSkillClass =
+    selectedClassData?.skillsMode === "custom_pick";
+
+  const customAttributePool = Number(selectedClassData?.attributePool || 0);
+  const customAttributeMaxPerStat = Number(selectedClassData?.attributeMaxPerStat || 0);
+  const customSkillPickCount = Number(selectedClassData?.skillPickCount || 0);
+  const customSkillPickBonus = Number(selectedClassData?.skillPickBonus || 0);
+
+  const customClassAttributeSpent = useMemo(
+    () => sumValues(customClassAttributes),
+    [customClassAttributes]
+  );
+
+  useEffect(() => {
+    setCustomClassAttributes({ ...EMPTY_ATTRIBUTES });
+    setCustomClassSkills([]);
+    setForm((prev) => ({
+      ...prev,
+      selectedAbility: "",
+    }));
+  }, [selectedClassData?.id]);
+
+  const classAttributes = useMemo(() => {
+    if (isCustomAttributeClass) {
+      return { ...EMPTY_ATTRIBUTES, ...customClassAttributes };
+    }
+
+    return { ...EMPTY_ATTRIBUTES, ...(selectedClassData?.attributeBonuses ?? {}) };
+  }, [selectedClassData, isCustomAttributeClass, customClassAttributes]);
+
   const classSkills = useMemo(() => {
+    if (isCustomSkillClass) {
+      return customClassSkills.reduce(
+        (acc, key) => {
+          acc[key] = customSkillPickBonus;
+          return acc;
+        },
+        { ...EMPTY_SKILLS }
+      );
+    }
+
     return { ...EMPTY_SKILLS, ...(selectedClassData?.skillBonuses ?? {}) };
-  }, [selectedClassData]);
+  }, [selectedClassData, isCustomSkillClass, customClassSkills, customSkillPickBonus]);
 
   const finalAttributes = useMemo(() => {
     return mergeNumberObjects(classAttributes, form.allocatedAttributes);
@@ -241,11 +312,11 @@ export default function CreateCharacterPage() {
 
   const selectedAbilityData = useMemo(() => {
     return (
-      (selectedClassData?.abilities || []).find(
+      uniqueSelectedClassAbilities.find(
         (ability) => ability.name === form.selectedAbility
       ) || null
     );
-  }, [selectedClassData, form.selectedAbility]);
+  }, [uniqueSelectedClassAbilities, form.selectedAbility]);
 
   function handleBasicChange(e) {
     const { name, value } = e.target;
@@ -317,6 +388,46 @@ export default function CreateCharacterPage() {
     }));
   }
 
+  function incrementCustomClassAttribute(key) {
+    if (!isCustomAttributeClass) return;
+    if (customClassAttributeSpent >= customAttributePool) return;
+
+    setCustomClassAttributes((prev) => {
+      const current = Number(prev[key] || 0);
+      if (current >= customAttributeMaxPerStat) return prev;
+
+      return {
+        ...prev,
+        [key]: current + 1,
+      };
+    });
+  }
+
+  function decrementCustomClassAttribute(key) {
+    if (!isCustomAttributeClass) return;
+
+    setCustomClassAttributes((prev) => ({
+      ...prev,
+      [key]: Math.max(0, Number(prev[key] || 0) - 1),
+    }));
+  }
+
+  function toggleCustomClassSkill(key) {
+    if (!isCustomSkillClass) return;
+
+    setCustomClassSkills((prev) => {
+      if (prev.includes(key)) {
+        return prev.filter((item) => item !== key);
+      }
+
+      if (prev.length >= customSkillPickCount) {
+        return prev;
+      }
+
+      return [...prev, key];
+    });
+  }
+
   async function handleSubmit(e) {
     e.preventDefault();
     setError("");
@@ -334,6 +445,16 @@ export default function CreateCharacterPage() {
 
     if (!form.selectedAbility) {
       setError("Selecione uma habilidade inicial.");
+      return;
+    }
+
+    if (isCustomAttributeClass && customClassAttributeSpent !== customAttributePool) {
+      setError(`Distribua exatamente ${customAttributePool} pontos nos atributos da classe.`);
+      return;
+    }
+
+    if (isCustomSkillClass && customClassSkills.length !== customSkillPickCount) {
+      setError(`Escolha exatamente ${customSkillPickCount} perícias da classe.`);
       return;
     }
 
@@ -579,9 +700,13 @@ export default function CreateCharacterPage() {
                       }
                       style={styles.select}
                     >
-                      <option value="">Selecione</option>
-                      {(selectedClassData.abilities || []).map((ability) => (
-                        <option key={ability.name} value={ability.name}>
+                      <option value="">
+                        {uniqueSelectedClassAbilities.length
+                          ? "Selecione"
+                          : "Nenhuma habilidade disponível"}
+                      </option>
+                      {uniqueSelectedClassAbilities.map((ability) => (
+                        <option key={ability.id} value={ability.name}>
                           {ability.name}
                         </option>
                       ))}
@@ -595,8 +720,90 @@ export default function CreateCharacterPage() {
                     <div>
                       <h4 style={styles.abilityTitle}>{selectedAbilityData.name}</h4>
                       <p style={styles.abilityDescription}>
-                        {selectedAbilityData.description || "Sem descrição."}
+                        {selectedClassData?.abilities?.find(
+                          (item) =>
+                            (typeof item === "string"
+                              ? item
+                              : item?.name) === selectedAbilityData.name
+                        )?.description || "Sem descrição."}
                       </p>
+                    </div>
+                  </div>
+                ) : null}
+
+                {isCustomAttributeClass ? (
+                  <div style={styles.specialClassBox}>
+                    <h4 style={styles.specialClassTitle}>Atributos da classe</h4>
+                    <p style={styles.specialClassText}>
+                      Distribua {customAttributePool} pontos. Máximo de{" "}
+                      {customAttributeMaxPerStat} por atributo.
+                    </p>
+                    <p style={styles.specialClassText}>
+                      Pontos usados: {customClassAttributeSpent} / {customAttributePool}
+                    </p>
+
+                    <div style={styles.customAdjustGrid}>
+                      {Object.keys(EMPTY_ATTRIBUTES).map((key) => (
+                        <div key={key} style={styles.customAdjustCard}>
+                          <strong style={styles.customAdjustTitle}>
+                            {attributeLabels[key]}
+                          </strong>
+
+                          <div style={styles.customAdjustActions}>
+                            <button
+                              type="button"
+                              onClick={() => decrementCustomClassAttribute(key)}
+                              style={styles.customAdjustButton}
+                            >
+                              −
+                            </button>
+
+                            <div style={styles.customAdjustValue}>
+                              {customClassAttributes[key] ?? 0}
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => incrementCustomClassAttribute(key)}
+                              style={styles.customAdjustButtonPrimary}
+                            >
+                              +
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {isCustomSkillClass ? (
+                  <div style={{ ...styles.specialClassBox, marginTop: 18 }}>
+                    <h4 style={styles.specialClassTitle}>Perícias da classe</h4>
+                    <p style={styles.specialClassText}>
+                      Escolha {customSkillPickCount} perícias. Cada uma recebe +{customSkillPickBonus}.
+                    </p>
+                    <p style={styles.specialClassText}>
+                      Escolhidas: {customClassSkills.length} / {customSkillPickCount}
+                    </p>
+
+                    <div style={styles.customSkillPickGrid}>
+                      {Object.keys(EMPTY_SKILLS).map((key) => {
+                        const selected = customClassSkills.includes(key);
+
+                        return (
+                          <button
+                            key={key}
+                            type="button"
+                            onClick={() => toggleCustomClassSkill(key)}
+                            style={{
+                              ...styles.customSkillPickButton,
+                              ...(selected ? styles.customSkillPickButtonActive : {}),
+                            }}
+                          >
+                            {skillLabels[key]}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
                 ) : null}
@@ -1345,6 +1552,100 @@ const styles = {
     margin: "8px 0 0",
     color: "#cbd5e1",
     lineHeight: 1.7,
+  },
+  specialClassBox: {
+    marginTop: 18,
+    padding: 16,
+    borderRadius: 18,
+    background: "rgba(255,255,255,0.03)",
+    border: "1px solid rgba(255,255,255,0.06)",
+  },
+  specialClassTitle: {
+    margin: 0,
+    marginBottom: 8,
+    fontSize: 18,
+  },
+  specialClassText: {
+    margin: "6px 0",
+    color: "#94a3b8",
+    lineHeight: 1.6,
+  },
+  customAdjustGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+    gap: 14,
+    marginTop: 16,
+  },
+  customAdjustCard: {
+    borderRadius: 18,
+    border: "1px solid rgba(255,255,255,0.08)",
+    background: "rgba(255,255,255,0.03)",
+    padding: 14,
+    display: "flex",
+    flexDirection: "column",
+    gap: 12,
+  },
+  customAdjustTitle: {
+    fontSize: 15,
+  },
+  customAdjustActions: {
+    display: "grid",
+    gridTemplateColumns: "44px 1fr 44px",
+    gap: 8,
+    alignItems: "center",
+  },
+  customAdjustButton: {
+    height: 40,
+    borderRadius: 12,
+    border: "1px solid rgba(255,255,255,0.08)",
+    background: "rgba(255,255,255,0.04)",
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: 800,
+    cursor: "pointer",
+  },
+  customAdjustButtonPrimary: {
+    height: 40,
+    borderRadius: 12,
+    border: "none",
+    background: "linear-gradient(135deg, #1d4ed8, #2563eb)",
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: 800,
+    cursor: "pointer",
+  },
+  customAdjustValue: {
+    height: 40,
+    borderRadius: 12,
+    border: "1px solid rgba(255,255,255,0.08)",
+    background: "rgba(255,255,255,0.03)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontWeight: 800,
+    fontSize: 16,
+  },
+  customSkillPickGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+    gap: 12,
+    marginTop: 16,
+  },
+  customSkillPickButton: {
+    borderRadius: 14,
+    border: "1px solid rgba(255,255,255,0.08)",
+    background: "rgba(255,255,255,0.03)",
+    color: "#e2e8f0",
+    padding: "14px 12px",
+    fontSize: 14,
+    fontWeight: 700,
+    cursor: "pointer",
+    textAlign: "left",
+  },
+  customSkillPickButtonActive: {
+    background: "rgba(37,99,235,0.18)",
+    border: "1px solid rgba(96,165,250,0.35)",
+    color: "#bfdbfe",
   },
   progressPill: {
     border: "1px solid rgba(255,255,255,0.08)",

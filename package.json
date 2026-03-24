@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "next dev --webpack",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "sync:classes": "node --env-file=.env scripts/sync-classes-from-book.mjs"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

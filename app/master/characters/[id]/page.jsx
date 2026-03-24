@@ -95,6 +95,7 @@ export default function MasterCharacterEditPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [savingPoints, setSavingPoints] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [pointsDelta, setPointsDelta] = useState("3");
@@ -328,6 +329,7 @@ export default function MasterCharacterEditPage() {
 
       setForm((prev) => ({
         ...prev,
+        id: data.id ?? prev.id,
         heightCm: data.heightCm ?? "",
         weightKg: data.weightKg ?? "",
       }));
@@ -341,24 +343,56 @@ export default function MasterCharacterEditPage() {
     }
   }
 
+  async function handleDelete() {
+    const confirmed = window.confirm(
+      `Tem certeza que deseja excluir a ficha "${form.name || "Sem nome"}"? Essa ação não pode ser desfeita.`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setDeleting(true);
+      setError("");
+      setSuccess("");
+
+      const response = await fetch(`/api/master/characters/${id}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+
+      const data = await safeJson(response);
+
+      if (!response.ok || !data) {
+        setError(data?.detail || data?.error || "Erro ao excluir ficha.");
+        return;
+      }
+
+      alert("Ficha excluída com sucesso.");
+      window.location.href = "/master";
+    } catch (err) {
+      console.error("MASTER CHARACTER DELETE ERROR:", err);
+      setError("Erro inesperado ao excluir ficha.");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   if (loading) {
     return (
-      <div style={styles.page}>
-        <div style={styles.container}>
-          <div style={styles.loadingCard}>Carregando ficha...</div>
-        </div>
+      <div style={styles.loadingPage}>
+        <div style={styles.loadingCard}>Carregando ficha...</div>
       </div>
     );
   }
 
   if (error && !form.id) {
     return (
-      <div style={styles.page}>
-        <div style={styles.container}>
+      <div style={styles.loadingPage}>
+        <div style={styles.errorCard}>
           <Link href="/master" style={styles.backButton}>
             ← Voltar
           </Link>
-          <div style={styles.errorBox}>{error}</div>
+          <p style={{ marginTop: 16, color: "#fecaca" }}>{error}</p>
         </div>
       </div>
     );
@@ -366,6 +400,9 @@ export default function MasterCharacterEditPage() {
 
   return (
     <div style={styles.page}>
+      <div style={styles.bgOrbTop} />
+      <div style={styles.bgOrbBottom} />
+
       <div style={styles.container}>
         <div style={styles.topBar}>
           <Link href="/master" style={styles.backButton}>
@@ -374,72 +411,103 @@ export default function MasterCharacterEditPage() {
         </div>
 
         <section style={styles.heroCard}>
-          <div>
-            <p style={styles.heroTag}>Mestre • edição completa</p>
-            <h1 style={styles.heroTitle}>{form.name || "Ficha"}</h1>
+          <div style={{ flex: 1 }}>
+            <p style={styles.heroEyebrow}>Mestre • edição completa</p>
+            <h1 style={styles.heroTitle}># {form.name || "Ficha"}</h1>
             <p style={styles.heroSubtitle}>
               Classe: {form.class || "-"} • ID: {form.id || "-"}
             </p>
           </div>
 
-          <div style={styles.heroInfoBox}>
-            <div>Pontos: <strong>{form.progressPoints}</strong></div>
-            <div>Gasto: <strong>{progressPreview.totalSpent}</strong></div>
-            <div>Restante: <strong>{progressPreview.remaining}</strong></div>
+          <div style={styles.heroStats}>
+            <InfoBadge label="Pontos" value={form.progressPoints} />
+            <InfoBadge label="Gasto" value={progressPreview.totalSpent} />
+            <InfoBadge label="Restante" value={progressPreview.remaining} />
           </div>
         </section>
 
-        <form onSubmit={handleSave} style={styles.grid}>
+        <form onSubmit={handleSave} style={styles.formWrap}>
           <section style={styles.card}>
             <h2 style={styles.cardTitle}>Dados principais</h2>
 
-            <div style={styles.formGrid}>
-              <Field label="Nome" name="name" value={form.name} onChange={handleBasicChange} />
-              <Field label="Classe" name="class" value={form.class} onChange={handleBasicChange} />
-              <Field label="Class ID" name="classId" type="number" value={form.classId} onChange={handleBasicChange} />
-              <Field label="Habilidade inicial" name="selectedAbility" value={form.selectedAbility} onChange={handleBasicChange} />
-              <Field label="Idade" name="age" type="number" value={form.age} onChange={handleBasicChange} />
-              <Field label="Altura (150-200)" name="heightCm" type="number" value={form.heightCm} onChange={handleBasicChange} />
-              <Field label="Peso (50-100)" name="weightKg" type="number" value={form.weightKg} onChange={handleBasicChange} />
-              <Field label="Fôlego base" name="staminaBase" type="number" value={form.staminaBase} onChange={handleBasicChange} />
-              <Field label="Fôlego atual" name="staminaCurrent" type="number" value={form.staminaCurrent} onChange={handleBasicChange} />
+            <div style={styles.grid2}>
+              <Input
+                label="Nome"
+                name="name"
+                value={form.name}
+                onChange={handleBasicChange}
+              />
+              <Input
+                label="Classe"
+                name="class"
+                value={form.class}
+                onChange={handleBasicChange}
+              />
+              <Input
+                label="Class ID"
+                name="classId"
+                value={form.classId}
+                onChange={handleBasicChange}
+                type="number"
+              />
+              <Input
+                label="Habilidade inicial"
+                name="selectedAbility"
+                value={form.selectedAbility}
+                onChange={handleBasicChange}
+              />
+              <Input
+                label="Idade"
+                name="age"
+                value={form.age}
+                onChange={handleBasicChange}
+                type="number"
+              />
+              <Input
+                label="Altura (cm)"
+                name="heightCm"
+                value={form.heightCm}
+                onChange={handleBasicChange}
+                type="number"
+              />
+              <Input
+                label="Peso (kg)"
+                name="weightKg"
+                value={form.weightKg}
+                onChange={handleBasicChange}
+                type="number"
+              />
+              <Input
+                label="Fôlego base"
+                name="staminaBase"
+                value={form.staminaBase}
+                onChange={handleBasicChange}
+                type="number"
+              />
+              <Input
+                label="Fôlego atual"
+                name="staminaCurrent"
+                value={form.staminaCurrent}
+                onChange={handleBasicChange}
+                type="number"
+              />
+              <div style={styles.field}>
+                <label style={styles.label}>Traço especial</label>
+                <select
+                  name="specialTrait"
+                  value={form.specialTrait}
+                  onChange={handleBasicChange}
+                  style={styles.input}
+                >
+                  <option value="">Nenhum</option>
+                  <option value="genio">Gênio</option>
+                  <option value="prodigio">Prodígio</option>
+                </select>
+              </div>
             </div>
 
-            <div style={styles.traitRow}>
-              <label style={styles.checkboxWrap}>
-                <input
-                  type="radio"
-                  name="specialTrait"
-                  value=""
-                  checked={form.specialTrait === ""}
-                  onChange={handleBasicChange}
-                />
-                Nenhum
-              </label>
-
-              <label style={styles.checkboxWrap}>
-                <input
-                  type="radio"
-                  name="specialTrait"
-                  value="genio"
-                  checked={form.specialTrait === "genio"}
-                  onChange={handleBasicChange}
-                />
-                Gênio
-              </label>
-
-              <label style={styles.checkboxWrap}>
-                <input
-                  type="radio"
-                  name="specialTrait"
-                  value="prodigio"
-                  checked={form.specialTrait === "prodigio"}
-                  onChange={handleBasicChange}
-                />
-                Prodígio
-              </label>
-
-              <label style={styles.checkboxWrap}>
+            <div style={styles.checkboxRow}>
+              <label style={styles.checkboxLabel}>
                 <input
                   type="checkbox"
                   name="isAmbidextrous"
@@ -450,178 +518,214 @@ export default function MasterCharacterEditPage() {
               </label>
             </div>
 
-            <label style={styles.label}>Notas</label>
-            <textarea
-              name="notes"
-              value={form.notes}
-              onChange={handleBasicChange}
-              rows={5}
-              style={styles.textarea}
-            />
+            <div style={styles.field}>
+              <label style={styles.label}>Notas</label>
+              <textarea
+                name="notes"
+                value={form.notes}
+                onChange={handleBasicChange}
+                style={styles.textarea}
+                rows={5}
+              />
+            </div>
           </section>
 
           <section style={styles.card}>
-            <h2 style={styles.cardTitle}>Progressão</h2>
+            <h2 style={styles.cardTitle}>Pontos de progressão</h2>
 
-            <div style={styles.pointsBar}>
-              <input
-                type="number"
+            <div style={styles.pointsRow}>
+              <Input
+                label="Alterar pontos"
+                name="pointsDelta"
                 value={pointsDelta}
                 onChange={(e) => setPointsDelta(e.target.value)}
-                style={styles.input}
+                type="number"
               />
+
               <button
                 type="button"
                 onClick={handleAddPoints}
-                style={styles.secondaryButton}
                 disabled={savingPoints}
+                style={styles.secondaryButton}
               >
-                {savingPoints ? "Alterando..." : "Alterar pontos"}
+                {savingPoints ? "Alterando..." : "Aplicar pontos"}
               </button>
             </div>
 
-            <div style={styles.formGrid}>
-              <Field
-                label="Pontos totais"
-                name="progressPoints"
-                type="number"
-                value={form.progressPoints}
-                onChange={handleBasicChange}
-              />
-              <Field
-                label="Atributos comprados"
-                name="spentAttributeUpgrades"
-                type="number"
-                value={form.spentAttributeUpgrades}
-                onChange={handleBasicChange}
-              />
-              <Field
-                label="Perícias compradas"
-                name="spentSkillUpgrades"
-                type="number"
-                value={form.spentSkillUpgrades}
-                onChange={handleBasicChange}
-              />
+            <div style={styles.progressStats}>
+              <InfoBadge label="Totais" value={form.progressPoints} />
+              <InfoBadge label="Gastos" value={progressPreview.totalSpent} />
+              <InfoBadge label="Restantes" value={progressPreview.remaining} />
             </div>
 
-            <div style={styles.infoBox}>
-              <div>Custo atributo: <strong>2</strong></div>
-              <div>Custo perícia: <strong>1</strong></div>
-              <div>Comprar habilidade: <strong>{progressPreview.existingAbilityCost}</strong></div>
-              <div>Criar habilidade: <strong>{progressPreview.customAbilityCost}</strong></div>
-            </div>
-
-            <label style={styles.label}>Habilidades compradas existentes (1 por linha)</label>
-            <textarea
-              value={form.boughtAbilitiesText}
-              onChange={(e) =>
-                setForm((prev) => ({ ...prev, boughtAbilitiesText: e.target.value }))
-              }
-              rows={5}
-              style={styles.textarea}
-            />
-
-            <label style={styles.label}>Habilidades criadas/custom (1 por linha)</label>
-            <textarea
-              value={form.customAbilitiesText}
-              onChange={(e) =>
-                setForm((prev) => ({ ...prev, customAbilitiesText: e.target.value }))
-              }
-              rows={5}
-              style={styles.textarea}
-            />
-
-            <div style={styles.infoBox}>
-              <div>Gasto total: <strong>{progressPreview.totalSpent}</strong></div>
-              <div>Restante: <strong>{progressPreview.remaining}</strong></div>
-              <div>
-                Regra perícia/atributo:{" "}
-                <strong>
-                  {progressPreview.invalidSkillsRule ? "Inválida" : "OK"}
-                </strong>
+            {progressPreview.invalidSkillsRule ? (
+              <div style={styles.errorBox}>
+                As perícias gastas não podem ultrapassar os atributos gastos.
               </div>
-            </div>
+            ) : null}
           </section>
 
-          <StatSection
+          <StatsSection
             title="Atributos de classe"
             values={form.classAttributes}
             labels={attributeLabels}
             onChange={(key, value) => handleNestedChange("classAttributes", key, value)}
           />
 
-          <StatSection
-            title="Atributos base do jogador"
+          <StatsSection
+            title="Atributos alocados"
             values={form.allocatedAttributes}
             labels={attributeLabels}
             onChange={(key, value) => handleNestedChange("allocatedAttributes", key, value)}
           />
 
-          <StatSection
+          <StatsSection
             title="Atributos de progressão"
             values={form.levelUpAttributes}
             labels={attributeLabels}
             onChange={(key, value) => handleNestedChange("levelUpAttributes", key, value)}
           />
 
-          <StatSection
+          <section style={styles.card}>
+            <h2 style={styles.cardTitle}>Gastos manuais</h2>
+
+            <div style={styles.grid2}>
+              <Input
+                label="Atributos gastos"
+                name="spentAttributeUpgrades"
+                value={form.spentAttributeUpgrades}
+                onChange={handleBasicChange}
+                type="number"
+              />
+              <Input
+                label="Perícias gastas"
+                name="spentSkillUpgrades"
+                value={form.spentSkillUpgrades}
+                onChange={handleBasicChange}
+                type="number"
+              />
+            </div>
+          </section>
+
+          <StatsSection
             title="Perícias de classe"
             values={form.classSkills}
             labels={skillLabels}
             onChange={(key, value) => handleNestedChange("classSkills", key, value)}
+            isSkills
           />
 
-          <StatSection
-            title="Perícias base do jogador"
+          <StatsSection
+            title="Perícias alocadas"
             values={form.allocatedSkills}
             labels={skillLabels}
             onChange={(key, value) => handleNestedChange("allocatedSkills", key, value)}
+            isSkills
           />
 
-          <StatSection
+          <StatsSection
             title="Perícias de progressão"
             values={form.levelUpSkills}
             labels={skillLabels}
             onChange={(key, value) => handleNestedChange("levelUpSkills", key, value)}
+            isSkills
           />
+
+          <section style={styles.card}>
+            <h2 style={styles.cardTitle}>Habilidades</h2>
+
+            <div style={styles.grid2}>
+              <div style={styles.field}>
+                <label style={styles.label}>Habilidades compradas (1 por linha)</label>
+                <textarea
+                  value={form.boughtAbilitiesText}
+                  onChange={(e) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      boughtAbilitiesText: e.target.value,
+                    }))
+                  }
+                  style={styles.textarea}
+                  rows={8}
+                />
+              </div>
+
+              <div style={styles.field}>
+                <label style={styles.label}>Habilidades criadas (1 por linha)</label>
+                <textarea
+                  value={form.customAbilitiesText}
+                  onChange={(e) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      customAbilitiesText: e.target.value,
+                    }))
+                  }
+                  style={styles.textarea}
+                  rows={8}
+                />
+              </div>
+            </div>
+          </section>
 
           {error ? <div style={styles.errorBox}>{error}</div> : null}
           {success ? <div style={styles.successBox}>{success}</div> : null}
 
-          <button
-            type="submit"
-            style={styles.primaryButton}
-            disabled={saving || progressPreview.invalid}
-          >
-            {saving ? "Salvando..." : "Salvar ficha"}
-          </button>
+          <div style={styles.footerActions}>
+            <button
+              type="submit"
+              disabled={saving || deleting}
+              style={styles.primaryButton}
+            >
+              {saving ? "Salvando..." : "Salvar ficha"}
+            </button>
+          </div>
+
+          <div style={styles.dangerZone}>
+            <button
+              type="button"
+              onClick={handleDelete}
+              disabled={deleting || saving}
+              style={styles.deleteButton}
+            >
+              {deleting ? "Excluindo ficha..." : "Excluir ficha"}
+            </button>
+          </div>
         </form>
       </div>
     </div>
   );
 }
 
-function Field({ label, type = "text", ...props }) {
+function Input({ label, ...props }) {
   return (
     <div style={styles.field}>
       <label style={styles.label}>{label}</label>
-      <input type={type} {...props} style={styles.input} />
+      <input {...props} style={styles.input} />
     </div>
   );
 }
 
-function StatSection({ title, values, labels, onChange }) {
+function InfoBadge({ label, value }) {
+  return (
+    <div style={styles.infoCard}>
+      <span style={styles.infoLabel}>{label}</span>
+      <strong style={styles.infoValue}>{value}</strong>
+    </div>
+  );
+}
+
+function StatsSection({ title, values, labels, onChange }) {
   return (
     <section style={styles.card}>
       <h2 style={styles.cardTitle}>{title}</h2>
 
-      <div style={styles.statGrid}>
+      <div style={styles.statsGrid}>
         {Object.keys(values || {}).map((key) => (
-          <div key={key} style={styles.field}>
+          <div key={key} style={styles.statCard}>
             <label style={styles.label}>{labels[key] || key}</label>
             <input
               type="number"
-              value={values[key]}
+              value={values[key] ?? 0}
               onChange={(e) => onChange(key, e.target.value)}
               style={styles.input}
             />
@@ -635,13 +739,41 @@ function StatSection({ title, values, labels, onChange }) {
 const styles = {
   page: {
     minHeight: "100vh",
-    background: "#060c18",
+    background:
+      "radial-gradient(circle at top left, rgba(37,99,235,0.18), transparent 24%), radial-gradient(circle at bottom right, rgba(59,130,246,0.12), transparent 28%), #060c18",
     color: "#f8fafc",
     padding: 24,
+    position: "relative",
+    overflow: "hidden",
+  },
+  bgOrbTop: {
+    position: "absolute",
+    top: -120,
+    left: -100,
+    width: 280,
+    height: 280,
+    borderRadius: "50%",
+    background: "rgba(37,99,235,0.15)",
+    filter: "blur(40px)",
+    pointerEvents: "none",
+  },
+  bgOrbBottom: {
+    position: "absolute",
+    bottom: -140,
+    right: -80,
+    width: 320,
+    height: 320,
+    borderRadius: "50%",
+    background: "rgba(59,130,246,0.12)",
+    filter: "blur(48px)",
+    pointerEvents: "none",
   },
   container: {
+    width: "100%",
     maxWidth: 1400,
     margin: "0 auto",
+    position: "relative",
+    zIndex: 1,
     display: "flex",
     flexDirection: "column",
     gap: 20,
@@ -651,13 +783,15 @@ const styles = {
     justifyContent: "flex-start",
   },
   backButton: {
-    textDecoration: "none",
     color: "#cbd5e1",
+    textDecoration: "none",
     border: "1px solid rgba(255,255,255,0.08)",
-    padding: "10px 14px",
-    borderRadius: 14,
     background: "rgba(255,255,255,0.03)",
-    width: "fit-content",
+    borderRadius: 14,
+    padding: "10px 14px",
+    fontWeight: 600,
+    display: "inline-flex",
+    alignItems: "center",
   },
   heroCard: {
     display: "flex",
@@ -666,9 +800,12 @@ const styles = {
     padding: 28,
     borderRadius: 28,
     border: "1px solid rgba(255,255,255,0.08)",
-    background: "linear-gradient(135deg, rgba(15,23,42,0.95), rgba(17,24,39,0.88))",
+    background:
+      "linear-gradient(135deg, rgba(15,23,42,0.95), rgba(17,24,39,0.88))",
+    boxShadow: "0 18px 45px rgba(0,0,0,0.24)",
+    alignItems: "center",
   },
-  heroTag: {
+  heroEyebrow: {
     margin: 0,
     color: "#93c5fd",
     fontSize: 13,
@@ -678,24 +815,21 @@ const styles = {
   },
   heroTitle: {
     margin: "10px 0 0",
-    fontSize: 40,
+    fontSize: 38,
+    lineHeight: 1.05,
   },
   heroSubtitle: {
     margin: "12px 0 0",
     color: "#cbd5e1",
-    fontSize: 16,
+    fontSize: 17,
   },
-  heroInfoBox: {
-    minWidth: 240,
-    padding: 18,
-    borderRadius: 18,
-    background: "rgba(255,255,255,0.04)",
-    border: "1px solid rgba(255,255,255,0.08)",
-    display: "flex",
-    flexDirection: "column",
-    gap: 10,
+  heroStats: {
+    display: "grid",
+    gridTemplateColumns: "repeat(3, minmax(120px, 1fr))",
+    gap: 12,
+    minWidth: 380,
   },
-  grid: {
+  formWrap: {
     display: "flex",
     flexDirection: "column",
     gap: 20,
@@ -705,20 +839,17 @@ const styles = {
     borderRadius: 24,
     border: "1px solid rgba(255,255,255,0.08)",
     padding: 22,
+    boxShadow: "0 14px 36px rgba(0,0,0,0.22)",
+    backdropFilter: "blur(10px)",
   },
   cardTitle: {
-    margin: "0 0 16px",
+    margin: "0 0 18px 0",
     fontSize: 24,
   },
-  formGrid: {
+  grid2: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-    gap: 14,
-  },
-  statGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-    gap: 12,
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: 16,
   },
   field: {
     display: "flex",
@@ -726,9 +857,11 @@ const styles = {
     gap: 8,
   },
   label: {
-    color: "#cbd5e1",
-    fontSize: 13,
-    fontWeight: 600,
+    color: "#94a3b8",
+    fontSize: 12,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+    fontWeight: 700,
   },
   input: {
     width: "100%",
@@ -737,8 +870,9 @@ const styles = {
     background: "rgba(255,255,255,0.04)",
     color: "#f8fafc",
     padding: "12px 14px",
-    fontSize: 15,
     outline: "none",
+    fontSize: 15,
+    boxSizing: "border-box",
   },
   textarea: {
     width: "100%",
@@ -747,40 +881,79 @@ const styles = {
     background: "rgba(255,255,255,0.04)",
     color: "#f8fafc",
     padding: "12px 14px",
-    fontSize: 15,
     outline: "none",
+    fontSize: 15,
     resize: "vertical",
-    marginTop: 8,
+    boxSizing: "border-box",
   },
-  traitRow: {
-    display: "flex",
-    gap: 16,
-    flexWrap: "wrap",
+  checkboxRow: {
     marginTop: 16,
-    marginBottom: 16,
-  },
-  checkboxWrap: {
     display: "flex",
-    gap: 8,
     alignItems: "center",
-    color: "#e2e8f0",
   },
-  pointsBar: {
-    display: "grid",
-    gridTemplateColumns: "160px 220px",
-    gap: 12,
-    marginBottom: 18,
-  },
-  infoBox: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+  checkboxLabel: {
+    display: "inline-flex",
+    alignItems: "center",
     gap: 10,
-    marginTop: 16,
-    marginBottom: 16,
-    padding: 14,
+    color: "#e2e8f0",
+    fontWeight: 600,
+  },
+  pointsRow: {
+    display: "grid",
+    gridTemplateColumns: "minmax(0, 220px) 180px",
+    gap: 16,
+    alignItems: "end",
+  },
+  secondaryButton: {
+    border: "1px solid rgba(255,255,255,0.08)",
     borderRadius: 16,
+    background: "rgba(255,255,255,0.04)",
+    color: "#fff",
+    padding: "14px 16px",
+    fontSize: 15,
+    fontWeight: 800,
+    cursor: "pointer",
+    height: 48,
+  },
+  progressStats: {
+    display: "grid",
+    gridTemplateColumns: "repeat(3, minmax(140px, 1fr))",
+    gap: 12,
+    marginTop: 18,
+  },
+  statsGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+    gap: 14,
+  },
+  statCard: {
+    borderRadius: 18,
+    border: "1px solid rgba(255,255,255,0.08)",
+    background: "rgba(255,255,255,0.03)",
+    padding: 14,
+  },
+  infoCard: {
+    borderRadius: 18,
+    padding: 14,
     background: "rgba(255,255,255,0.03)",
     border: "1px solid rgba(255,255,255,0.06)",
+    display: "flex",
+    flexDirection: "column",
+    gap: 8,
+  },
+  infoLabel: {
+    color: "#94a3b8",
+    fontSize: 12,
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
+  },
+  infoValue: {
+    fontSize: 20,
+    wordBreak: "break-word",
+  },
+  footerActions: {
+    display: "flex",
+    justifyContent: "flex-end",
   },
   primaryButton: {
     border: "none",
@@ -792,14 +965,19 @@ const styles = {
     fontWeight: 800,
     cursor: "pointer",
   },
-  secondaryButton: {
-    border: "1px solid rgba(255,255,255,0.08)",
+  dangerZone: {
+    marginTop: 4,
+    display: "flex",
+    justifyContent: "flex-end",
+  },
+  deleteButton: {
+    border: "1px solid rgba(248,113,113,0.35)",
     borderRadius: 18,
-    background: "rgba(255,255,255,0.04)",
-    color: "#fff",
+    background: "rgba(239,68,68,0.12)",
+    color: "#fecaca",
     padding: "16px 18px",
-    fontSize: 15,
-    fontWeight: 700,
+    fontSize: 16,
+    fontWeight: 800,
     cursor: "pointer",
   },
   errorBox: {
@@ -818,11 +996,27 @@ const styles = {
     padding: 16,
     fontWeight: 600,
   },
+  loadingPage: {
+    minHeight: "100vh",
+    background: "#060c18",
+    color: "#f8fafc",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 24,
+  },
   loadingCard: {
     borderRadius: 20,
     border: "1px solid rgba(255,255,255,0.08)",
     background: "#0f172a",
     padding: "24px 30px",
     fontSize: 18,
+  },
+  errorCard: {
+    borderRadius: 24,
+    border: "1px solid rgba(255,255,255,0.08)",
+    background: "#0f172a",
+    padding: 28,
+    maxWidth: 520,
   },
 };

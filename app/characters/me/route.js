@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { pool } from "../../../../lib/db";
-import { verifySessionCookie } from "../../../../lib/auth";
+import { pool } from "../../../lib/db";
+import { verifySessionCookie } from "../../../lib/auth";
 
 export const runtime = "nodejs";
 

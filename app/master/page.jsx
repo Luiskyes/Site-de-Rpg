@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import AppTopBar from "../components/AppTopBar";
+import RankingEditor from "./RankingEditor";
 
 async function safeJson(response) {
   try {
@@ -21,6 +23,7 @@ export default function MasterPage() {
   const [user, setUser] = useState(null);
   const [config, setConfig] = useState(null);
   const [characters, setCharacters] = useState([]);
+  const [ranking, setRanking] = useState(null);
   const [form, setForm] = useState({
     attributePointsAtCreation: "",
     skillPointsAtCreation: "",
@@ -40,6 +43,8 @@ export default function MasterPage() {
   const [success, setSuccess] = useState("");
 
   useEffect(() => {
+    const controller = new AbortController();
+
     async function loadData() {
       try {
         setAuthError("");
@@ -47,34 +52,22 @@ export default function MasterPage() {
         setCharactersError("");
         setSuccess("");
 
-        const [userRes, configRes, charsRes] = await Promise.all([
-          fetch("/api/auth/me", {
-            cache: "no-store",
-            credentials: "include",
-          }),
-          fetch("/api/game-config", {
-            cache: "no-store",
-            credentials: "include",
-          }),
-          fetch("/api/master/characters", {
-            cache: "no-store",
-            credentials: "include",
-          }),
-        ]);
+        const response = await fetch("/api/master/dashboard", {
+          cache: "no-store",
+          credentials: "include",
+          signal: controller.signal,
+        });
+        const data = await safeJson(response);
 
-        const userData = await safeJson(userRes);
-
-        if (!userRes.ok || !userData?.isMaster) {
-          setAuthError("Acesso negado. Esta área é exclusiva do mestre.");
-          setLoading(false);
+        if (!response.ok || !data?.user?.isMaster) {
+          setAuthError(data?.error || "Acesso negado. Esta área é exclusiva do mestre.");
           return;
         }
 
-        setUser(userData);
+        setUser(data.user);
+        const configData = data.config;
 
-        const configData = await safeJson(configRes);
-
-        if (configRes.ok && configData) {
+        if (configData) {
           setConfig(configData);
           setForm({
             attributePointsAtCreation: configData.attributePointsAtCreation ?? 0,
@@ -90,9 +83,9 @@ export default function MasterPage() {
           );
         }
 
-        const charsData = await safeJson(charsRes);
+        const charsData = data.characters;
 
-        if (charsRes.ok && Array.isArray(charsData)) {
+        if (Array.isArray(charsData)) {
           setCharacters(charsData);
         } else {
           setCharacters([]);
@@ -101,15 +94,19 @@ export default function MasterPage() {
               "Erro ao carregar as fichas do mestre."
           );
         }
+
+        setRanking(data.ranking ?? null);
       } catch (err) {
+        if (err?.name === "AbortError") return;
         console.error("MASTER PAGE LOAD ERROR:", err);
         setAuthError("Erro ao carregar painel do mestre.");
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted) setLoading(false);
       }
     }
 
     loadData();
+    return () => controller.abort();
   }, []);
 
   function handleChange(e) {
@@ -167,15 +164,17 @@ export default function MasterPage() {
 
   if (loading) {
     return (
-      <div style={styles.loadingPage}>
-        <div style={styles.loadingCard}>Carregando painel do mestre...</div>
+      <div className="ui-loading-page" style={styles.loadingPage}>
+        <div className="ui-loading-card" role="status" aria-live="polite" style={styles.loadingCard}>
+          Carregando painel do mestre...
+        </div>
       </div>
     );
   }
 
   if (authError) {
     return (
-      <div style={styles.loadingPage}>
+      <div className="ui-loading-page" style={styles.loadingPage}>
         <div style={styles.errorCard}>
           <h1 style={{ marginTop: 0 }}>Acesso restrito</h1>
           <p style={{ color: "#cbd5e1" }}>{authError}</p>
@@ -188,40 +187,36 @@ export default function MasterPage() {
   }
 
   return (
-    <div style={styles.page}>
-      <div style={styles.bgOrbTop} />
-      <div style={styles.bgOrbBottom} />
+    <div className="ui-page" style={styles.page}>
+      <div className="ui-orb" style={styles.bgOrbTop} />
+      <div className="ui-orb" style={styles.bgOrbBottom} />
 
-      <div style={styles.container}>
-        <div style={styles.topBar}>
-          <Link href="/" style={styles.backButton}>
-            ← Voltar
-          </Link>
-        </div>
+      <div className="ui-container" style={styles.container}>
+        <AppTopBar backHref="/" backLabel="Painel" context="Área do mestre" />
 
-        <section style={styles.heroCard}>
+        <section className="ui-hero" style={styles.heroCard}>
           <div>
             <p style={styles.heroTag}>Mestre</p>
-            <h1 style={styles.heroTitle}>Painel do Mestre</h1>
+            <h1 className="ui-title" style={styles.heroTitle}>Painel do Mestre</h1>
             <p style={styles.heroSubtitle}>
               Ajuste os pontos globais do sistema e acompanhe as fichas criadas
               pelos jogadores.
             </p>
           </div>
 
-          <div style={styles.heroInfoBox}>
+          <div className="ui-hero-side" style={styles.heroInfoBox}>
             <span style={styles.heroInfoLabel}>Conta atual</span>
-            <strong style={styles.heroInfoValue}>{user?.email || "-"}</strong>
+            <strong className="ui-info-value" style={styles.heroInfoValue}>{user?.email || "-"}</strong>
             <p style={styles.heroInfoMeta}>
               {characters.length} ficha(s) encontrada(s)
             </p>
           </div>
         </section>
 
-        <div style={styles.mainGrid}>
-          <div style={styles.leftColumn}>
-            <section style={styles.card}>
-              <div style={styles.cardHeader}>
+        <div className="ui-main-grid" style={styles.mainGrid}>
+          <div className="ui-master-config" style={styles.leftColumn}>
+            <section className="ui-card" style={styles.card}>
+              <div className="ui-card-header" style={styles.cardHeader}>
                 <h2 style={styles.cardTitle}>Configuração global</h2>
                 <p style={styles.cardSubtitle}>
                   Esses valores afetam criação de ficha e evolução do sistema.
@@ -229,7 +224,7 @@ export default function MasterPage() {
               </div>
 
               <form onSubmit={handleSave}>
-                <div style={styles.formGrid}>
+                <div className="ui-grid" style={styles.formGrid}>
                   <Field
                     label="Pontos de atributo na criação"
                     name="attributePointsAtCreation"
@@ -271,16 +266,16 @@ export default function MasterPage() {
                 {configError ? <div style={styles.errorBox}>{configError}</div> : null}
                 {success ? <div style={styles.successBox}>{success}</div> : null}
 
-                <button type="submit" style={styles.saveButton} disabled={saving}>
+                <button className="ui-interactive" type="submit" style={styles.saveButton} disabled={saving}>
                   {saving ? "Salvando..." : "Salvar configurações"}
                 </button>
               </form>
             </section>
           </div>
 
-          <div style={styles.rightColumn}>
-            <section style={styles.card}>
-              <div style={styles.cardHeader}>
+          <div className="ui-master-players" style={styles.rightColumn}>
+            <section className="ui-card" style={styles.card}>
+              <div className="ui-card-header" style={styles.cardHeader}>
                 <h2 style={styles.cardTitle}>Fichas dos jogadores</h2>
                 <p style={styles.cardSubtitle}>
                   Lista rápida para inspeção e acesso direto.
@@ -297,6 +292,7 @@ export default function MasterPage() {
                 ) : (
                   characters.map((character) => (
                     <Link
+                      className="ui-interactive"
                       key={character.id}
                       href={`/master/characters/${character.id}`}
                       style={styles.characterCard}
@@ -326,6 +322,10 @@ export default function MasterPage() {
             </section>
           </div>
         </div>
+
+        {ranking ? (
+          <RankingEditor characters={characters} initialRanking={ranking} />
+        ) : null}
       </div>
     </div>
   );
@@ -334,8 +334,9 @@ export default function MasterPage() {
 function Field({ label, name, value, onChange }) {
   return (
     <div style={styles.fieldWrapper}>
-      <label style={styles.fieldLabel}>{label}</label>
+      <label htmlFor={name} style={styles.fieldLabel}>{label}</label>
       <input
+        id={name}
         type="number"
         name={name}
         value={value}

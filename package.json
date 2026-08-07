@@ -6,11 +6,19 @@
     "dev": "next dev --webpack",
     "build": "next build",
     "start": "next start",
-    "sync:classes": "node --env-file=.env scripts/sync-classes-from-book.mjs"
+    "db:local:setup": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/local-db.ps1 setup",
+    "db:local:start": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/local-db.ps1 start",
+    "db:local:stop": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/local-db.ps1 stop",
+    "db:local:status": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/local-db.ps1 status",
+    "db:neon:setup": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/neon-db.ps1 setup",
+    "db:neon:status": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/neon-db.ps1 status",
+    "db:neon:test": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/neon-db.ps1 test",
+    "sync:classes": "node --env-file=.env.local scripts/sync-classes-from-book.mjs"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
     "bcryptjs": "^3.0.3",
+    "google-auth-library": "^11.0.0",
     "jose": "^5.2.2",
     "next": "^16.1.7",
     "pg": "^8.11.5",

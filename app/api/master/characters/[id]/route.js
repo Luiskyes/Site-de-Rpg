@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { pool } from "../../../../../lib/db";
 import { requireMaster } from "../../../../../lib/master-auth";
+import { calculateCharacterSheet } from "../../../../../lib/character-calculations";
+import { normalizeCustomAbilities } from "../../../../../lib/custom-abilities";
 
 export const runtime = "nodejs";
 
@@ -53,7 +55,7 @@ export async function GET(req, { params }) {
       );
     }
 
-    return NextResponse.json(result.rows[0], { status: 200 });
+    return NextResponse.json(calculateCharacterSheet(result.rows[0]), { status: 200 });
   } catch (err) {
     console.error("MASTER CHARACTER GET ERROR:", err);
 
@@ -143,7 +145,7 @@ export async function PATCH(req, { params }) {
         Number(body.spentAttributeUpgrades || 0),
         Number(body.spentSkillUpgrades || 0),
         JSON.stringify(body.boughtAbilities || []),
-        JSON.stringify(body.customAbilities || []),
+        JSON.stringify(normalizeCustomAbilities(body.customAbilities)),
         id,
       ]
     );

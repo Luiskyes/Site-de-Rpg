@@ -1,13 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
+import AppTopBar from "../../components/AppTopBar";
 import {
   getHeightModifiers,
   getWeightModifiers,
   getAmbidexterityModifiers,
 } from "../../../lib/character-rules";
+
+import { styles } from "./styles";
 
 const EMPTY_ATTRIBUTES = {
   potencia: 0,
@@ -91,6 +93,16 @@ function sumValues(obj) {
   return Object.values(obj || {}).reduce((acc, value) => acc + Number(value || 0), 0);
 }
 
+function updatePointAllocation({ current, key, value, maxPerItem, maxTotal }) {
+  const nextValue = Math.max(0, Math.min(value, maxPerItem));
+  const previousValue = Number(current?.[key] || 0);
+
+  if (nextValue === previousValue) return current;
+  if (sumValues(current) - previousValue + nextValue > maxTotal) return current;
+
+  return { ...current, [key]: nextValue };
+}
+
 function mergeNumberObjects(...objects) {
   const result = {};
   for (const obj of objects) {
@@ -149,11 +161,13 @@ export default function CreateCharacterPage() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
+    const controller = new AbortController();
+
     async function fetchData() {
       try {
         const [classesRes, configRes] = await Promise.all([
-          fetch("/api/classes", { cache: "no-store" }),
-          fetch("/api/game-config", { cache: "no-store" }),
+          fetch("/api/classes", { cache: "no-store", signal: controller.signal }),
+          fetch("/api/game-config", { cache: "no-store", signal: controller.signal }),
         ]);
 
         const classesData = await classesRes.json();
@@ -162,13 +176,15 @@ export default function CreateCharacterPage() {
         if (classesRes.ok) setClasses(classesData);
         if (configRes.ok) setConfig(configData);
       } catch (err) {
+        if (err?.name === "AbortError") return;
         console.error("Erro ao carregar dados:", err);
       } finally {
-        setLoadingData(false);
+        if (!controller.signal.aborted) setLoadingData(false);
       }
     }
 
     fetchData();
+    return () => controller.abort();
   }, []);
 
   const selectedClassData = useMemo(() => {
@@ -352,41 +368,39 @@ export default function CreateCharacterPage() {
     }));
   }
 
-  function handleAttributeChange(key, rawValue) {
+  const handleAttributeChange = useCallback((key, rawValue) => {
     const value = Number(rawValue || 0);
-    const maxAllowed = form.specialTrait === "prodigio" ? 999 : baseAttributeMax;
-    const nextValue = Math.max(0, Math.min(value, maxAllowed));
-    const previous = Number(form.allocatedAttributes[key] || 0);
-    const nextSpent = attributePointsSpent - previous + nextValue;
+    setForm((prev) => {
+      const allocatedAttributes = updatePointAllocation({
+        current: prev.allocatedAttributes,
+        key,
+        value,
+        maxPerItem: prev.specialTrait === "prodigio" ? 999 : baseAttributeMax,
+        maxTotal: attributeTotal,
+      });
 
-    if (nextSpent > attributeTotal) return;
+      return allocatedAttributes === prev.allocatedAttributes
+        ? prev
+        : { ...prev, allocatedAttributes };
+    });
+  }, [attributeTotal, baseAttributeMax]);
 
-    setForm((prev) => ({
-      ...prev,
-      allocatedAttributes: {
-        ...prev.allocatedAttributes,
-        [key]: nextValue,
-      },
-    }));
-  }
-
-  function handleSkillChange(key, rawValue) {
+  const handleSkillChange = useCallback((key, rawValue) => {
     const value = Number(rawValue || 0);
-    const maxAllowed = form.specialTrait === "genio" ? 999 : baseSkillMax;
-    const nextValue = Math.max(0, Math.min(value, maxAllowed));
-    const previous = Number(form.allocatedSkills[key] || 0);
-    const nextSpent = skillPointsSpent - previous + nextValue;
+    setForm((prev) => {
+      const allocatedSkills = updatePointAllocation({
+        current: prev.allocatedSkills,
+        key,
+        value,
+        maxPerItem: prev.specialTrait === "genio" ? 999 : baseSkillMax,
+        maxTotal: skillTotal,
+      });
 
-    if (nextSpent > skillTotal) return;
-
-    setForm((prev) => ({
-      ...prev,
-      allocatedSkills: {
-        ...prev.allocatedSkills,
-        [key]: nextValue,
-      },
-    }));
-  }
+      return allocatedSkills === prev.allocatedSkills
+        ? prev
+        : { ...prev, allocatedSkills };
+    });
+  }, [baseSkillMax, skillTotal]);
 
   function incrementCustomClassAttribute(key) {
     if (!isCustomAttributeClass) return;
@@ -511,9 +525,8 @@ export default function CreateCharacterPage() {
       }
 
       setSuccess("Ficha criada com sucesso!");
-      setTimeout(() => {
-        router.push(`/characters/${data.id}`);
-      }, 700);
+      router.push(`/characters/${data.id}`);
+      router.refresh();
     } catch {
       setError("Erro inesperado ao criar ficha");
     } finally {
@@ -523,28 +536,26 @@ export default function CreateCharacterPage() {
 
   if (loadingData) {
     return (
-      <div style={styles.loadingPage}>
-        <div style={styles.loadingCard}>Carregando criação de ficha...</div>
+      <div className="ui-loading-page" style={styles.loadingPage}>
+        <div className="ui-loading-card" role="status" aria-live="polite" style={styles.loadingCard}>
+          Carregando criação de ficha...
+        </div>
       </div>
     );
   }
 
   return (
-    <div style={styles.page}>
-      <div style={styles.bgOrbTop} />
-      <div style={styles.bgOrbBottom} />
+    <div className="ui-page" style={styles.page}>
+      <div className="ui-orb" style={styles.bgOrbTop} />
+      <div className="ui-orb" style={styles.bgOrbBottom} />
 
-      <div style={styles.container}>
-        <div style={styles.topBar}>
-          <Link href="/" style={styles.backButton}>
-            ← Voltar
-          </Link>
-        </div>
+      <div className="ui-container" style={styles.container}>
+        <AppTopBar backHref="/" backLabel="Painel" context="Nova ficha" />
 
-        <section style={styles.heroCard}>
+        <section className="ui-hero" style={styles.heroCard}>
           <div style={{ flex: 1 }}>
             <p style={styles.heroEyebrow}>Nova ficha</p>
-            <h1 style={styles.heroTitle}>Criar Personagem</h1>
+            <h1 className="ui-title" style={styles.heroTitle}>Criar Personagem</h1>
             <p style={styles.heroSubtitle}>
               Escolha a classe, ative seus diferenciais e distribua os pontos com
               uma visualização clara do resultado final.
@@ -557,7 +568,7 @@ export default function CreateCharacterPage() {
             </div>
           </div>
 
-          <div style={styles.heroSideCard}>
+          <div className="ui-hero-side" style={styles.heroSideCard}>
             <div style={styles.heroSideItem}>
               <span style={styles.heroSideLabel}>Atributos</span>
               <strong style={styles.heroSideValue}>
@@ -579,13 +590,13 @@ export default function CreateCharacterPage() {
           </div>
         </section>
 
-        <form onSubmit={handleSubmit} style={styles.mainGrid}>
+        <form className="ui-main-grid" onSubmit={handleSubmit} style={styles.mainGrid}>
           <div style={styles.leftColumn}>
             <Card
               title="Dados principais"
               subtitle="Base do personagem e status inicial"
             >
-              <div style={styles.fieldGrid}>
+              <div className="ui-grid" style={styles.fieldGrid}>
                 <Field
                   label="Nome"
                   name="name"
@@ -641,8 +652,9 @@ export default function CreateCharacterPage() {
               </div>
 
               <div style={{ marginTop: 18 }}>
-                <label style={styles.textareaLabel}>Notas</label>
+                <label htmlFor="character-notes" style={styles.textareaLabel}>Notas</label>
                 <textarea
+                  id="character-notes"
                   name="notes"
                   value={form.notes}
                   onChange={handleBasicChange}
@@ -657,7 +669,7 @@ export default function CreateCharacterPage() {
               title="Traços especiais"
               subtitle="Gênio e Prodígio são exclusivos. Ambidestria é independente."
             >
-              <div style={styles.traitsGrid}>
+              <div className="ui-grid" style={styles.traitsGrid}>
                 <TraitButton
                   title="Prodígio"
                   description="+6 pontos em atributos. Exclusivo com Gênio."
@@ -742,7 +754,7 @@ export default function CreateCharacterPage() {
                       Pontos usados: {customClassAttributeSpent} / {customAttributePool}
                     </p>
 
-                    <div style={styles.customAdjustGrid}>
+                    <div className="ui-grid" style={styles.customAdjustGrid}>
                       {Object.keys(EMPTY_ATTRIBUTES).map((key) => (
                         <div key={key} style={styles.customAdjustCard}>
                           <strong style={styles.customAdjustTitle}>
@@ -786,7 +798,7 @@ export default function CreateCharacterPage() {
                       Escolhidas: {customClassSkills.length} / {customSkillPickCount}
                     </p>
 
-                    <div style={styles.customSkillPickGrid}>
+                    <div className="ui-grid" style={styles.customSkillPickGrid}>
                       {Object.keys(EMPTY_SKILLS).map((key) => {
                         const selected = customClassSkills.includes(key);
 
@@ -821,15 +833,16 @@ export default function CreateCharacterPage() {
                 />
               }
             >
-              <div style={styles.attributesGrid}>
+              <div className="ui-grid" style={styles.attributesGrid}>
                 {Object.keys(EMPTY_ATTRIBUTES).map((key) => (
                   <AttributeInputCard
                     key={key}
+                    attributeKey={key}
                     label={attributeLabels[key]}
                     classValue={classAttributes[key] ?? 0}
                     freeValue={form.allocatedAttributes[key] ?? 0}
                     totalValue={finalAttributes[key] ?? 0}
-                    onChange={(value) => handleAttributeChange(key, value)}
+                    onChange={handleAttributeChange}
                   />
                 ))}
               </div>
@@ -853,10 +866,11 @@ export default function CreateCharacterPage() {
                       <h3 style={styles.skillSectionTitle}>{group.title}</h3>
                     </div>
 
-                    <div style={styles.skillGrid}>
+                    <div className="ui-grid" style={styles.skillGrid}>
                       {group.keys.map((key) => (
                         <SkillInputCard
                           key={key}
+                          skillKey={key}
                           label={skillLabels[key]}
                           classValue={classSkills[key] ?? 0}
                           freeValue={form.allocatedSkills[key] ?? 0}
@@ -865,7 +879,7 @@ export default function CreateCharacterPage() {
                           weightValue={weightModifiers[key] ?? 0}
                           ambidexterityValue={ambidexterityModifiers[key] ?? 0}
                           totalValue={finalSkillsPreview[key] ?? 0}
-                          onChange={(value) => handleSkillChange(key, value)}
+                          onChange={handleSkillChange}
                         />
                       ))}
                     </div>
@@ -877,12 +891,12 @@ export default function CreateCharacterPage() {
             {error ? <div style={styles.errorBox}>{error}</div> : null}
             {success ? <div style={styles.successBox}>{success}</div> : null}
 
-            <button type="submit" style={styles.submitButton} disabled={saving}>
+            <button className="ui-submit ui-interactive" type="submit" style={styles.submitButton} disabled={saving}>
               {saving ? "Criando ficha..." : "Criar Ficha"}
             </button>
           </div>
 
-          <div style={styles.rightColumn}>
+          <div className="ui-sticky-column" style={styles.rightColumn}>
             <Card
               title="Resumo visual"
               subtitle="Prévia do resultado final da ficha"
@@ -905,7 +919,7 @@ export default function CreateCharacterPage() {
                 </div>
               </div>
 
-              <div style={styles.previewStatGrid}>
+              <div className="ui-grid" style={styles.previewStatGrid}>
                 <MiniStat title="Fôlego Base" value={form.staminaBase || "-"} />
                 <MiniStat
                   title="Habilidade"
@@ -948,8 +962,8 @@ export default function CreateCharacterPage() {
 
 function Card({ title, subtitle, rightSlot, children }) {
   return (
-    <section style={styles.card}>
-      <div style={styles.cardHeader}>
+    <section className="ui-card" style={styles.card}>
+      <div className="ui-card-header" style={styles.cardHeader}>
         <div>
           <h2 style={styles.cardTitle}>{title}</h2>
           {subtitle ? <p style={styles.cardSubtitle}>{subtitle}</p> : null}
@@ -971,8 +985,9 @@ function Field({
 }) {
   return (
     <div style={styles.fieldWrapper}>
-      <label style={styles.fieldLabel}>{label}</label>
+      <label htmlFor={name} style={styles.fieldLabel}>{label}</label>
       <input
+        id={name}
         name={name}
         value={value}
         onChange={onChange}
@@ -987,8 +1002,8 @@ function Field({
 function SelectField({ label, value, onChange, options }) {
   return (
     <div style={styles.fieldWrapper}>
-      <label style={styles.fieldLabel}>{label}</label>
-      <select value={value} onChange={onChange} style={styles.select}>
+      <label htmlFor="classId" style={styles.fieldLabel}>{label}</label>
+      <select id="classId" value={value} onChange={onChange} style={styles.select}>
         <option value="">Selecione</option>
         {options.map((option) => (
           <option
@@ -1027,6 +1042,7 @@ function TraitButton({ title, description, active, onClick, accent }) {
 
   return (
     <button
+      className="ui-interactive"
       type="button"
       onClick={onClick}
       style={{
@@ -1057,7 +1073,8 @@ function TraitButton({ title, description, active, onClick, accent }) {
   );
 }
 
-function AttributeInputCard({
+const AttributeInputCard = memo(function AttributeInputCard({
+  attributeKey,
   label,
   classValue,
   freeValue,
@@ -1081,14 +1098,16 @@ function AttributeInputCard({
         type="number"
         min={0}
         value={freeValue}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => onChange(attributeKey, e.target.value)}
         style={styles.numberInput}
+        aria-label={`Pontos livres de ${label}`}
       />
     </div>
   );
-}
+});
 
-function SkillInputCard({
+const SkillInputCard = memo(function SkillInputCard({
+  skillKey,
   label,
   classValue,
   freeValue,
@@ -1099,19 +1118,30 @@ function SkillInputCard({
   totalValue,
   onChange,
 }) {
+  const visibleModifiers = [
+    ["Classe", classValue],
+    ["Livre", freeValue],
+    ["Atributos", passiveValue],
+    ["Altura", heightValue],
+    ["Peso", weightValue],
+    ["Ambidestria", ambidexterityValue],
+  ].filter(([, value]) => Number(value || 0) !== 0);
+
   return (
     <div style={styles.skillCard}>
       <div style={styles.skillCardHead}>
         <div>
           <h4 style={styles.skillCardTitle}>{label}</h4>
-          <div style={styles.modifierRow}>
-            <SmallModifier text={`Classe ${formatModifier(classValue)}`} />
-            <SmallModifier text={`Livre ${formatModifier(freeValue)}`} />
-            <SmallModifier text={`Atributos ${formatModifier(passiveValue)}`} />
-            <SmallModifier text={`Altura ${formatModifier(heightValue)}`} />
-            <SmallModifier text={`Peso ${formatModifier(weightValue)}`} />
-            <SmallModifier text={`Ambidestria ${formatModifier(ambidexterityValue)}`} />
-          </div>
+          {visibleModifiers.length ? (
+            <div style={styles.modifierRow}>
+              {visibleModifiers.map(([source, value]) => (
+                <SmallModifier
+                  key={source}
+                  text={`${source} ${formatModifier(value)}`}
+                />
+              ))}
+            </div>
+          ) : null}
         </div>
 
         <div style={styles.totalBadge}>{totalValue}</div>
@@ -1121,12 +1151,13 @@ function SkillInputCard({
         type="number"
         min={0}
         value={freeValue}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => onChange(skillKey, e.target.value)}
         style={styles.smallNumberInput}
+        aria-label={`Pontos livres de ${label}`}
       />
     </div>
   );
-}
+});
 
 function SmallModifier({ text }) {
   return <span style={styles.smallModifier}>{text}</span>;
@@ -1245,671 +1276,3 @@ function Seal({ label, accent = "blue" }) {
     </span>
   );
 }
-
-const styles = {
-  page: {
-    minHeight: "100vh",
-    background:
-      "radial-gradient(circle at top left, rgba(37,99,235,0.18), transparent 24%), radial-gradient(circle at bottom right, rgba(59,130,246,0.12), transparent 28%), #060c18",
-    color: "#f8fafc",
-    padding: "24px",
-    position: "relative",
-    overflow: "hidden",
-  },
-  bgOrbTop: {
-    position: "absolute",
-    top: -120,
-    left: -100,
-    width: 280,
-    height: 280,
-    borderRadius: "50%",
-    background: "rgba(37,99,235,0.15)",
-    filter: "blur(40px)",
-    pointerEvents: "none",
-  },
-  bgOrbBottom: {
-    position: "absolute",
-    bottom: -140,
-    right: -80,
-    width: 320,
-    height: 320,
-    borderRadius: "50%",
-    background: "rgba(59,130,246,0.12)",
-    filter: "blur(48px)",
-    pointerEvents: "none",
-  },
-  container: {
-    width: "100%",
-    maxWidth: "1440px",
-    margin: "0 auto",
-    position: "relative",
-    zIndex: 1,
-    display: "flex",
-    flexDirection: "column",
-    gap: 20,
-  },
-  topBar: {
-    display: "flex",
-    justifyContent: "flex-start",
-  },
-  backButton: {
-    color: "#cbd5e1",
-    textDecoration: "none",
-    border: "1px solid rgba(255,255,255,0.08)",
-    background: "rgba(255,255,255,0.03)",
-    borderRadius: 14,
-    padding: "10px 14px",
-    fontWeight: 600,
-  },
-  heroCard: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "stretch",
-    gap: 20,
-    padding: 28,
-    borderRadius: 28,
-    border: "1px solid rgba(255,255,255,0.08)",
-    background:
-      "linear-gradient(135deg, rgba(15,23,42,0.95), rgba(17,24,39,0.88))",
-    boxShadow: "0 18px 45px rgba(0,0,0,0.24)",
-  },
-  heroEyebrow: {
-    margin: 0,
-    marginBottom: 10,
-    color: "#93c5fd",
-    fontSize: 13,
-    textTransform: "uppercase",
-    letterSpacing: "0.12em",
-    fontWeight: 700,
-  },
-  heroTitle: {
-    margin: 0,
-    fontSize: 42,
-    lineHeight: 1.05,
-  },
-  heroSubtitle: {
-    marginTop: 12,
-    marginBottom: 0,
-    color: "#cbd5e1",
-    lineHeight: 1.7,
-    maxWidth: 760,
-    fontSize: 16,
-  },
-  heroSealRow: {
-    display: "flex",
-    gap: 10,
-    flexWrap: "wrap",
-    marginTop: 18,
-  },
-  heroSideCard: {
-    minWidth: 260,
-    display: "flex",
-    flexDirection: "column",
-    gap: 12,
-    padding: 18,
-    borderRadius: 22,
-    background: "rgba(255,255,255,0.03)",
-    border: "1px solid rgba(255,255,255,0.08)",
-  },
-  heroSideItem: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 4,
-  },
-  heroSideLabel: {
-    color: "#94a3b8",
-    fontSize: 12,
-    textTransform: "uppercase",
-    letterSpacing: "0.1em",
-  },
-  heroSideValue: {
-    fontSize: 26,
-  },
-  heroSideValueSmall: {
-    fontSize: 18,
-  },
-  mainGrid: {
-    display: "grid",
-    gridTemplateColumns: "minmax(0, 1.55fr) minmax(320px, 0.95fr)",
-    gap: 20,
-    alignItems: "start",
-  },
-  leftColumn: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 20,
-  },
-  rightColumn: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 20,
-    position: "sticky",
-    top: 20,
-  },
-  card: {
-    background: "rgba(15,23,42,0.88)",
-    borderRadius: 24,
-    border: "1px solid rgba(255,255,255,0.08)",
-    padding: 22,
-    boxShadow: "0 14px 36px rgba(0,0,0,0.22)",
-    backdropFilter: "blur(10px)",
-  },
-  cardHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    gap: 16,
-    marginBottom: 18,
-  },
-  cardTitle: {
-    margin: 0,
-    fontSize: 24,
-  },
-  cardSubtitle: {
-    margin: "8px 0 0",
-    color: "#94a3b8",
-    lineHeight: 1.6,
-  },
-  fieldGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(210px, 1fr))",
-    gap: 14,
-  },
-  fieldWrapper: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 8,
-  },
-  fieldLabel: {
-    fontSize: 13,
-    color: "#cbd5e1",
-    fontWeight: 600,
-  },
-  textareaLabel: {
-    display: "block",
-    marginBottom: 8,
-    fontSize: 13,
-    color: "#cbd5e1",
-    fontWeight: 600,
-  },
-  input: {
-    width: "100%",
-    borderRadius: 14,
-    border: "1px solid rgba(255,255,255,0.08)",
-    background: "rgba(255,255,255,0.04)",
-    color: "#f8fafc",
-    padding: "13px 14px",
-    outline: "none",
-    fontSize: 15,
-  },
-  select: {
-    width: "100%",
-    borderRadius: 14,
-    border: "1px solid rgba(255,255,255,0.08)",
-    background: "#0f172a",
-    color: "#f8fafc",
-    padding: "13px 14px",
-    outline: "none",
-    fontSize: 15,
-  },
-  textarea: {
-    width: "100%",
-    resize: "vertical",
-    borderRadius: 16,
-    border: "1px solid rgba(255,255,255,0.08)",
-    background: "rgba(255,255,255,0.04)",
-    color: "#f8fafc",
-    padding: "14px",
-    outline: "none",
-    fontSize: 15,
-    minHeight: 110,
-  },
-  traitsGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))",
-    gap: 14,
-  },
-  traitButton: {
-    width: "100%",
-    textAlign: "left",
-    borderRadius: 20,
-    border: "1px solid rgba(255,255,255,0.08)",
-    padding: 18,
-    color: "#f8fafc",
-    cursor: "pointer",
-  },
-  traitTopRow: {
-    display: "flex",
-    alignItems: "center",
-    gap: 10,
-    flexWrap: "wrap",
-    marginBottom: 10,
-  },
-  traitDot: {
-    width: 10,
-    height: 10,
-    borderRadius: "50%",
-  },
-  traitTitle: {
-    fontSize: 18,
-    fontWeight: 700,
-    flex: 1,
-  },
-  traitStatus: {
-    border: "1px solid rgba(255,255,255,0.08)",
-    borderRadius: 999,
-    padding: "5px 10px",
-    fontSize: 12,
-    fontWeight: 700,
-  },
-  traitDescription: {
-    margin: 0,
-    color: "#cbd5e1",
-    lineHeight: 1.6,
-  },
-  classHeaderRow: {
-    display: "flex",
-    gap: 16,
-    flexWrap: "wrap",
-  },
-  inlineInfoBox: {
-    width: "100%",
-  },
-  inlineInfoLabel: {
-    display: "block",
-    marginBottom: 8,
-    color: "#cbd5e1",
-    fontSize: 13,
-    fontWeight: 600,
-  },
-  abilityCard: {
-    marginTop: 18,
-    display: "flex",
-    gap: 14,
-    alignItems: "flex-start",
-    padding: 16,
-    borderRadius: 18,
-    background:
-      "linear-gradient(180deg, rgba(59,130,246,0.12), rgba(37,99,235,0.05))",
-    border: "1px solid rgba(96,165,250,0.18)",
-  },
-  abilityIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    background: "rgba(255,255,255,0.08)",
-    fontSize: 18,
-    flexShrink: 0,
-  },
-  abilityTitle: {
-    margin: 0,
-    fontSize: 18,
-  },
-  abilityDescription: {
-    margin: "8px 0 0",
-    color: "#cbd5e1",
-    lineHeight: 1.7,
-  },
-  specialClassBox: {
-    marginTop: 18,
-    padding: 16,
-    borderRadius: 18,
-    background: "rgba(255,255,255,0.03)",
-    border: "1px solid rgba(255,255,255,0.06)",
-  },
-  specialClassTitle: {
-    margin: 0,
-    marginBottom: 8,
-    fontSize: 18,
-  },
-  specialClassText: {
-    margin: "6px 0",
-    color: "#94a3b8",
-    lineHeight: 1.6,
-  },
-  customAdjustGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-    gap: 14,
-    marginTop: 16,
-  },
-  customAdjustCard: {
-    borderRadius: 18,
-    border: "1px solid rgba(255,255,255,0.08)",
-    background: "rgba(255,255,255,0.03)",
-    padding: 14,
-    display: "flex",
-    flexDirection: "column",
-    gap: 12,
-  },
-  customAdjustTitle: {
-    fontSize: 15,
-  },
-  customAdjustActions: {
-    display: "grid",
-    gridTemplateColumns: "44px 1fr 44px",
-    gap: 8,
-    alignItems: "center",
-  },
-  customAdjustButton: {
-    height: 40,
-    borderRadius: 12,
-    border: "1px solid rgba(255,255,255,0.08)",
-    background: "rgba(255,255,255,0.04)",
-    color: "#fff",
-    fontSize: 18,
-    fontWeight: 800,
-    cursor: "pointer",
-  },
-  customAdjustButtonPrimary: {
-    height: 40,
-    borderRadius: 12,
-    border: "none",
-    background: "linear-gradient(135deg, #1d4ed8, #2563eb)",
-    color: "#fff",
-    fontSize: 18,
-    fontWeight: 800,
-    cursor: "pointer",
-  },
-  customAdjustValue: {
-    height: 40,
-    borderRadius: 12,
-    border: "1px solid rgba(255,255,255,0.08)",
-    background: "rgba(255,255,255,0.03)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontWeight: 800,
-    fontSize: 16,
-  },
-  customSkillPickGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-    gap: 12,
-    marginTop: 16,
-  },
-  customSkillPickButton: {
-    borderRadius: 14,
-    border: "1px solid rgba(255,255,255,0.08)",
-    background: "rgba(255,255,255,0.03)",
-    color: "#e2e8f0",
-    padding: "14px 12px",
-    fontSize: 14,
-    fontWeight: 700,
-    cursor: "pointer",
-    textAlign: "left",
-  },
-  customSkillPickButtonActive: {
-    background: "rgba(37,99,235,0.18)",
-    border: "1px solid rgba(96,165,250,0.35)",
-    color: "#bfdbfe",
-  },
-  progressPill: {
-    border: "1px solid rgba(255,255,255,0.08)",
-    borderRadius: 999,
-    padding: "9px 12px",
-    fontSize: 13,
-    fontWeight: 700,
-    background: "rgba(255,255,255,0.04)",
-  },
-  attributesGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-    gap: 14,
-  },
-  valueCard: {
-    borderRadius: 20,
-    border: "1px solid rgba(255,255,255,0.08)",
-    background: "rgba(255,255,255,0.03)",
-    padding: 16,
-  },
-  valueCardTop: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
-    alignItems: "flex-start",
-    marginBottom: 14,
-  },
-  valueCardTitle: {
-    margin: 0,
-    fontSize: 18,
-  },
-  valueCardMeta: {
-    margin: "6px 0 0",
-    color: "#94a3b8",
-    fontSize: 13,
-    lineHeight: 1.5,
-  },
-  totalBadge: {
-    minWidth: 46,
-    height: 46,
-    borderRadius: 14,
-    background:
-      "linear-gradient(180deg, rgba(37,99,235,0.28), rgba(37,99,235,0.14))",
-    border: "1px solid rgba(96,165,250,0.2)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontWeight: 800,
-    fontSize: 18,
-    flexShrink: 0,
-  },
-  numberInput: {
-    width: "100%",
-    borderRadius: 14,
-    border: "1px solid rgba(255,255,255,0.08)",
-    background: "#0b1220",
-    color: "#fff",
-    padding: "13px 14px",
-    outline: "none",
-    fontSize: 16,
-    fontWeight: 700,
-  },
-  skillsSections: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 18,
-  },
-  skillSection: {
-    borderRadius: 20,
-    border: "1px solid rgba(255,255,255,0.06)",
-    background: "rgba(255,255,255,0.02)",
-    padding: 16,
-  },
-  skillSectionHeader: {
-    marginBottom: 14,
-  },
-  skillSectionTitle: {
-    margin: 0,
-    fontSize: 20,
-  },
-  skillGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-    gap: 12,
-  },
-  skillCard: {
-    borderRadius: 18,
-    border: "1px solid rgba(255,255,255,0.08)",
-    background: "#0a1222",
-    padding: 14,
-  },
-  skillCardHead: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
-    alignItems: "flex-start",
-    marginBottom: 12,
-  },
-  skillCardTitle: {
-    margin: 0,
-    fontSize: 16,
-  },
-  modifierRow: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: 6,
-    marginTop: 8,
-  },
-  smallModifier: {
-    borderRadius: 999,
-    padding: "5px 8px",
-    background: "rgba(255,255,255,0.04)",
-    border: "1px solid rgba(255,255,255,0.06)",
-    color: "#cbd5e1",
-    fontSize: 11,
-    fontWeight: 600,
-  },
-  smallNumberInput: {
-    width: "100%",
-    borderRadius: 12,
-    border: "1px solid rgba(255,255,255,0.08)",
-    background: "rgba(255,255,255,0.04)",
-    color: "#fff",
-    padding: "12px 13px",
-    outline: "none",
-    fontSize: 15,
-    fontWeight: 700,
-  },
-  errorBox: {
-    background: "rgba(239,68,68,0.12)",
-    border: "1px solid rgba(248,113,113,0.28)",
-    color: "#fecaca",
-    borderRadius: 18,
-    padding: 16,
-    fontWeight: 600,
-  },
-  successBox: {
-    background: "rgba(16,185,129,0.12)",
-    border: "1px solid rgba(52,211,153,0.28)",
-    color: "#bbf7d0",
-    borderRadius: 18,
-    padding: 16,
-    fontWeight: 600,
-  },
-  submitButton: {
-    border: "none",
-    borderRadius: 18,
-    background: "linear-gradient(135deg, #1d4ed8, #2563eb)",
-    color: "#fff",
-    padding: "18px 20px",
-    fontSize: 17,
-    fontWeight: 800,
-    cursor: "pointer",
-    boxShadow: "0 16px 34px rgba(37,99,235,0.28)",
-  },
-  previewHero: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 16,
-    alignItems: "flex-start",
-  },
-  previewClass: {
-    margin: 0,
-    color: "#93c5fd",
-    fontSize: 13,
-    textTransform: "uppercase",
-    letterSpacing: "0.12em",
-    fontWeight: 700,
-  },
-  previewName: {
-    margin: "8px 0 0",
-    fontSize: 30,
-    lineHeight: 1.1,
-  },
-  previewMeta: {
-    margin: "10px 0 0",
-    color: "#94a3b8",
-  },
-  previewSealStack: {
-    display: "flex",
-    gap: 8,
-    flexWrap: "wrap",
-    justifyContent: "flex-end",
-  },
-  previewStatGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-    gap: 12,
-    marginTop: 18,
-  },
-  miniStat: {
-    borderRadius: 18,
-    padding: 14,
-    background: "rgba(255,255,255,0.03)",
-    border: "1px solid rgba(255,255,255,0.06)",
-    display: "flex",
-    flexDirection: "column",
-    gap: 8,
-  },
-  miniStatTitle: {
-    color: "#94a3b8",
-    fontSize: 12,
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-  },
-  miniStatValue: {
-    fontSize: 24,
-    wordBreak: "break-word",
-  },
-  previewList: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 10,
-  },
-  previewRow: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 16,
-    alignItems: "center",
-    padding: "10px 12px",
-    borderRadius: 14,
-    background: "rgba(255,255,255,0.03)",
-    border: "1px solid rgba(255,255,255,0.06)",
-  },
-  previewRowLabel: {
-    color: "#e2e8f0",
-  },
-  previewRowValue: {
-    fontSize: 16,
-  },
-  modifierBlock: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 10,
-    marginBottom: 14,
-  },
-  modifierBlockTitle: {
-    margin: 0,
-    fontSize: 16,
-  },
-  modifierBlockList: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 8,
-  },
-  emptyText: {
-    margin: 0,
-    color: "#94a3b8",
-    lineHeight: 1.6,
-  },
-  loadingPage: {
-    minHeight: "100vh",
-    background: "#060c18",
-    color: "#f8fafc",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 24,
-  },
-  loadingCard: {
-    borderRadius: 20,
-    border: "1px solid rgba(255,255,255,0.08)",
-    background: "#0f172a",
-    padding: "24px 30px",
-    fontSize: 18,
-  },
-};

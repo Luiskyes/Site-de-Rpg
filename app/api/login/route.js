@@ -1,15 +1,16 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { pool } from "../../../lib/db";
-import { createSessionToken } from "../../../lib/auth";
+import { createSessionToken, setSessionCookie } from "../../../lib/auth";
 
 export const runtime = "nodejs";
 
 export async function POST(req) {
   try {
     const { email, password } = await req.json();
+    const normalizedEmail = String(email || "").trim().toLowerCase();
 
-    if (!email || !password) {
+    if (!normalizedEmail || !password) {
       return NextResponse.json(
         { error: "E-mail e senha são obrigatórios" },
         { status: 400 }
@@ -23,7 +24,7 @@ export async function POST(req) {
       WHERE email = $1
       LIMIT 1
       `,
-      [email]
+      [normalizedEmail]
     );
 
     if (result.rowCount === 0) {
@@ -35,7 +36,9 @@ export async function POST(req) {
 
     const user = result.rows[0];
 
-    const passwordOk = await bcrypt.compare(password, user.passwordHash);
+    const passwordOk = user.passwordHash
+      ? await bcrypt.compare(password, user.passwordHash)
+      : false;
 
     if (!passwordOk) {
       return NextResponse.json(
@@ -54,15 +57,7 @@ export async function POST(req) {
       { status: 200 }
     );
 
-    response.cookies.set("session", token, {
-      httpOnly: true,
-      secure: false,
-      sameSite: "lax",
-      path: "/",
-      maxAge: 60 * 60 * 24 * 7,
-    });
-
-    return response;
+    return setSessionCookie(response, token);
   } catch (err) {
     console.error("LOGIN ERROR:", err);
 

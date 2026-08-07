@@ -108,6 +108,7 @@ async function main() {
   } catch (err) {
     await client.query("ROLLBACK");
     console.error("❌ Erro na sincronização:", err);
+    process.exitCode = 1;
   } finally {
     client.release();
     await pool.end();

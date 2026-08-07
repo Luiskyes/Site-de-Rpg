@@ -7,11 +7,19 @@ import {
   calculateProgressSpent,
 } from "../../../../../lib/character-rules";
 import { calculateCharacterSheet } from "../../../../../lib/character-calculations";
-import { getAbilitiesByClass } from "../../../../../lib/ability-book";
+import {
+  getAbilitiesByClass,
+  normalizeAbilityName,
+} from "../../../../../lib/ability-book";
+import {
+  MAX_CUSTOM_ABILITY_DESCRIPTION_LENGTH,
+  MAX_CUSTOM_ABILITY_NAME_LENGTH,
+  customAbilityKey,
+  normalizeCustomAbilities,
+} from "../../../../../lib/custom-abilities";
+import { normalizeStaminaUpgradeRolls } from "../../../../../lib/stamina-upgrades";
 
 export const runtime = "nodejs";
-
-const MAX_CUSTOM_ABILITY_NAME_LENGTH = 80;
 
 async function getIdFromParams(paramsPromise) {
   const resolved = await paramsPromise;
@@ -71,11 +79,7 @@ function sanitizeAbilityArray(value) {
 }
 
 function sanitizeCustomAbilityArray(value) {
-  const abilities = sanitizeAbilityArray(value);
-
-  return abilities
-    .map((item) => item.slice(0, MAX_CUSTOM_ABILITY_NAME_LENGTH).trim())
-    .filter(Boolean);
+  return normalizeCustomAbilities(value);
 }
 
 function everyValueAtLeast(nextObj, currentObj, template) {
@@ -86,6 +90,22 @@ function everyValueAtLeast(nextObj, currentObj, template) {
 
 function includesAllSavedAbilities(nextList, savedList) {
   return savedList.every((item) => nextList.includes(item));
+}
+
+function includesAllSavedCustomAbilities(nextList, savedList) {
+  const nextByKey = new Map(
+    nextList.map((ability) => [customAbilityKey(ability), ability])
+  );
+
+  return savedList.every((savedAbility) => {
+    const nextAbility = nextByKey.get(customAbilityKey(savedAbility));
+
+    return (
+      nextAbility &&
+      nextAbility.name === savedAbility.name &&
+      nextAbility.description === savedAbility.description
+    );
+  });
 }
 
 export async function PATCH(req, { params }) {
@@ -136,6 +156,16 @@ export async function PATCH(req, { params }) {
 
     const nextBoughtAbilities = sanitizeAbilityArray(body?.boughtAbilities);
     const nextCustomAbilities = sanitizeCustomAbilityArray(body?.customAbilities);
+    const initialAbilityKey = normalizeAbilityName(character.selectedAbility);
+    const isInitialAbility = (ability) =>
+      Boolean(initialAbilityKey) && normalizeAbilityName(ability) === initialAbilityKey;
+
+    if (nextBoughtAbilities.some(isInitialAbility)) {
+      return NextResponse.json(
+        { error: "A habilidade inicial do personagem não pode ser comprada novamente." },
+        { status: 400 }
+      );
+    }
 
     const savedLevelUpAttributes = normalizeObject(
       character.levelUpAttributes,
@@ -147,8 +177,13 @@ export async function PATCH(req, { params }) {
       EMPTY_SKILLS
     );
 
-    const savedBoughtAbilities = sanitizeAbilityArray(character.boughtAbilities);
+    const savedBoughtAbilities = sanitizeAbilityArray(character.boughtAbilities).filter(
+      (ability) => !isInitialAbility(ability)
+    );
     const savedCustomAbilities = sanitizeCustomAbilityArray(character.customAbilities);
+    const staminaUpgradeRolls = normalizeStaminaUpgradeRolls(
+      character.staminaUpgradeRolls
+    );
 
     if (!everyValueAtLeast(nextLevelUpAttributes, savedLevelUpAttributes, EMPTY_ATTRIBUTES)) {
       return NextResponse.json(
@@ -171,7 +206,7 @@ export async function PATCH(req, { params }) {
       );
     }
 
-    if (!includesAllSavedAbilities(nextCustomAbilities, savedCustomAbilities)) {
+    if (!includesAllSavedCustomAbilities(nextCustomAbilities, savedCustomAbilities)) {
       return NextResponse.json(
         { error: "Você não pode remover habilidades criadas já salvas." },
         { status: 400 }
@@ -179,7 +214,7 @@ export async function PATCH(req, { params }) {
     }
 
     const hasTooLongCustomAbility = nextCustomAbilities.some(
-      (ability) => ability.length > MAX_CUSTOM_ABILITY_NAME_LENGTH
+      (ability) => ability.name.length > MAX_CUSTOM_ABILITY_NAME_LENGTH
     );
 
     if (hasTooLongCustomAbility) {
@@ -191,7 +226,23 @@ export async function PATCH(req, { params }) {
       );
     }
 
-    const allowedClassAbilities = getAbilitiesByClass(character.class) || [];
+    const hasTooLongCustomAbilityDescription = nextCustomAbilities.some(
+      (ability) =>
+        ability.description.length > MAX_CUSTOM_ABILITY_DESCRIPTION_LENGTH
+    );
+
+    if (hasTooLongCustomAbilityDescription) {
+      return NextResponse.json(
+        {
+          error: `A descrição pode ter no máximo ${MAX_CUSTOM_ABILITY_DESCRIPTION_LENGTH} caracteres.`,
+        },
+        { status: 400 }
+      );
+    }
+
+    const allowedClassAbilities = (getAbilitiesByClass(character.class) || []).filter(
+      (ability) => !isInitialAbility(ability)
+    );
 
     const hasInvalidBoughtAbility = nextBoughtAbilities.some(
       (ability) => !allowedClassAbilities.includes(ability)
@@ -221,6 +272,7 @@ export async function PATCH(req, { params }) {
       spentSkillUpgrades,
       boughtAbilities: nextBoughtAbilities,
       customAbilities: nextCustomAbilities,
+      staminaUpgradeRolls,
       specialTrait: character.specialTrait ?? null,
     });
 

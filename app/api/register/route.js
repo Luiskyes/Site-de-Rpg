@@ -1,24 +1,31 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { pool } from "../../../lib/db";
-import { createSessionToken } from "../../../lib/auth";
+import { createSessionToken, setSessionCookie } from "../../../lib/auth";
+import { validatePassword } from "../../../lib/password-policy";
 
 export const runtime = "nodejs";
 
 export async function POST(req) {
   try {
     const { email, password } = await req.json();
+    const normalizedEmail = String(email || "").trim().toLowerCase();
 
-    if (!email || !password) {
+    if (!normalizedEmail || !password) {
       return NextResponse.json(
         { error: "E-mail e senha são obrigatórios" },
         { status: 400 }
       );
     }
 
+    const passwordError = validatePassword(password);
+    if (passwordError) {
+      return NextResponse.json({ error: passwordError }, { status: 400 });
+    }
+
     const existingUser = await pool.query(
       `SELECT id FROM users WHERE email = $1`,
-      [email]
+      [normalizedEmail]
     );
 
     if (existingUser.rowCount > 0) {
@@ -36,7 +43,7 @@ export async function POST(req) {
       VALUES ($1, $2)
       RETURNING id, email, "createdAt"
       `,
-      [email, passwordHash]
+      [normalizedEmail, passwordHash]
     );
 
     const user = result.rows[0];
@@ -50,15 +57,7 @@ export async function POST(req) {
       { status: 201 }
     );
 
-    response.cookies.set("session", token, {
-      httpOnly: true,
-      secure: false,
-      sameSite: "lax",
-      path: "/",
-      maxAge: 60 * 60 * 24 * 7,
-    });
-
-    return response;
+    return setSessionCookie(response, token);
   } catch (err) {
     console.error("REGISTER ERROR:", err);
 

@@ -1,61 +1,58 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import AppTopBar from "./components/AppTopBar";
+import homeStyles from "./home.module.css";
 
 export default function HomePage() {
   const router = useRouter();
-
   const [user, setUser] = useState(null);
   const [character, setCharacter] = useState(null);
+  const [campaign, setCampaign] = useState(null);
+  const [ranking, setRanking] = useState(null);
   const [loading, setLoading] = useState(true);
   const [loggingOut, setLoggingOut] = useState(false);
 
   useEffect(() => {
+    const controller = new AbortController();
+
     async function loadData() {
       try {
-        const userResponse = await fetch("/api/auth/me", {
+        const response = await fetch("/api/dashboard", {
           method: "GET",
           credentials: "include",
           cache: "no-store",
+          signal: controller.signal,
         });
 
-        if (!userResponse.ok) {
-          router.push("/login");
+        if (!response.ok) {
+          router.replace("/login");
           return;
         }
 
-        const userData = await userResponse.json();
-        setUser(userData);
-
-        const characterResponse = await fetch("/api/characters/me", {
-          method: "GET",
-          credentials: "include",
-          cache: "no-store",
-        });
-
-        if (characterResponse.ok) {
-          const characterData = await characterResponse.json();
-          setCharacter(characterData);
-        } else {
-          setCharacter(null);
-        }
+        const data = await response.json();
+        setUser(data.user ?? null);
+        setCharacter(data.character ?? null);
+        setCampaign(data.campaign ?? null);
+        setRanking(data.ranking ?? null);
       } catch (error) {
+        if (error?.name === "AbortError") return;
         console.error("HOME LOAD ERROR:", error);
-        router.push("/login");
+        router.replace("/login");
       } finally {
-        setLoading(false);
+        if (!controller.signal.aborted) setLoading(false);
       }
     }
 
     loadData();
+    return () => controller.abort();
   }, [router]);
 
   async function handleLogout() {
     try {
       setLoggingOut(true);
-
       const response = await fetch("/api/logout", {
         method: "POST",
         credentials: "include",
@@ -72,425 +69,460 @@ export default function HomePage() {
     }
   }
 
-  const hasCharacter = !!character;
-  const mainHref = hasCharacter ? `/characters/${character.id}` : "/characters/create";
+  const hasCharacter = Boolean(character);
+  const isMaster = Boolean(user?.isMaster);
+  const characterHref = hasCharacter
+    ? `/characters/${character.id}`
+    : "/characters/create";
 
-  const homeStats = useMemo(() => {
+  const hero = useMemo(() => {
+    if (isMaster) {
+      return {
+        eyebrow: "Central da campanha",
+        title: "A mesa está pronta.",
+        description:
+          "Conduza a campanha, acompanhe cada jogador e mantenha o ritmo da próxima sessão em um só lugar.",
+        status: "Visão do mestre ativa",
+      };
+    }
+
+    if (hasCharacter) {
+      return {
+        eyebrow: "Jornada em andamento",
+        title: `${character.name} volta ao campo.`,
+        description:
+          "Sua ficha, seu progresso e cada nova escolha estão reunidos para você continuar exatamente de onde parou.",
+        status: "Ficha pronta para jogar",
+      };
+    }
+
+    return {
+      eyebrow: "O início da jornada",
+      title: "Toda lenda começa com uma ficha.",
+      description:
+        "Crie seu personagem, escolha sua classe e prepare a primeira decisão da sua história em Keys Lock.",
+      status: "Aguardando personagem",
+    };
+  }, [character, hasCharacter, isMaster]);
+
+  const overview = useMemo(() => {
+    if (isMaster) {
+      return [
+        {
+          label: "Fichas na campanha",
+          value: campaign?.characterCount ?? 0,
+          meta: "personagens registrados",
+          tone: "blue",
+        },
+        {
+          label: "Jogadores",
+          value: campaign?.playerCount ?? 0,
+          meta: "com ficha vinculada",
+          tone: "cyan",
+        },
+        {
+          label: "Sua ficha",
+          value: hasCharacter ? character.name : "Não criada",
+          meta: hasCharacter ? character.class || "Sem classe" : "opcional para o mestre",
+          tone: "violet",
+          compact: true,
+        },
+        {
+          label: "Acesso",
+          value: "Mestre",
+          meta: "controle da campanha",
+          tone: "slate",
+        },
+      ];
+    }
+
     return [
       {
-        label: "Conta",
-        value: user?.email || "-",
-        small: true,
-      },
-      {
-        label: "Status",
-        value: hasCharacter ? "Ficha criada" : "Sem ficha",
+        label: "Personagem",
+        value: hasCharacter ? character.name : "Não criado",
+        meta: hasCharacter ? "ficha ativa" : "comece sua jornada",
+        tone: "blue",
+        compact: true,
       },
       {
         label: "Classe",
-        value: hasCharacter ? character.class || "-" : "-",
+        value: hasCharacter ? character.class || "—" : "—",
+        meta: "função em campo",
+        tone: "cyan",
       },
       {
-        label: "Perfil",
-        value: user?.isMaster ? "Mestre" : "Jogador",
+        label: "Nível",
+        value: hasCharacter ? character.level ?? 1 : "—",
+        meta: "progressão atual",
+        tone: "violet",
+      },
+      {
+        label: "Status",
+        value: hasCharacter ? "Pronto" : "Pendente",
+        meta: hasCharacter ? "ficha disponível" : "crie sua ficha",
+        tone: "slate",
       },
     ];
-  }, [user, character, hasCharacter]);
+  }, [campaign, character, hasCharacter, isMaster]);
 
   if (loading) {
     return (
-      <div style={styles.loadingPage}>
-        <div style={styles.loadingCard}>Carregando home...</div>
+      <div className="ui-loading-page" style={loadingStyles.page}>
+        <div
+          className={`ui-loading-card ${homeStyles.loadingCard}`}
+          role="status"
+          aria-live="polite"
+        >
+          <span className={homeStyles.loadingMark}>K</span>
+          <span>Preparando seu painel...</span>
+        </div>
       </div>
     );
   }
 
   return (
-    <div style={styles.page}>
-      <div style={styles.bgOrbTop} />
-      <div style={styles.bgOrbBottom} />
+    <div className={`ui-page ${homeStyles.page}`}>
+      <div className={`${homeStyles.orb} ${homeStyles.orbTop}`} aria-hidden="true" />
+      <div className={`${homeStyles.orb} ${homeStyles.orbBottom}`} aria-hidden="true" />
+      <div className={homeStyles.fieldLines} aria-hidden="true" />
 
-      <div style={styles.container}>
-        <div style={styles.topBar}>
-          <button
-            onClick={handleLogout}
-            disabled={loggingOut}
-            style={styles.logoutButton}
-          >
-            {loggingOut ? "Saindo..." : "Sair da conta"}
-          </button>
-        </div>
+      <div className={`ui-container ${homeStyles.container}`}>
+        <AppTopBar
+          context="Painel principal"
+          action={
+            <button
+              className={`ui-interactive ${homeStyles.logoutButton}`}
+              onClick={handleLogout}
+              disabled={loggingOut}
+            >
+              {loggingOut ? "Saindo..." : "Sair"}
+            </button>
+          }
+        />
 
-        <section style={styles.heroCard}>
-          <div style={{ flex: 1 }}>
-            <p style={styles.heroTag}>Painel Principal</p>
-            <h1 style={styles.heroTitle}>
-              Bem-vindo{user?.email ? `, ${user.email}` : ""}
-            </h1>
-            <p style={styles.heroSubtitle}>
-              Gerencie sua ficha, acompanhe o progresso do personagem e, se for
-              mestre, controle as configurações do jogo e visualize todas as fichas.
-            </p>
+        <main className={homeStyles.main}>
+          <section className={`ui-hero ${homeStyles.hero}`}>
+            <div className={homeStyles.heroCopy}>
+              <div className={homeStyles.commandLine}>
+                <span className={homeStyles.liveDot} aria-hidden="true" />
+                <span>{hero.eyebrow}</span>
+                <span className={homeStyles.commandCode}>KL / 01</span>
+              </div>
 
-            <div style={styles.heroBadgeRow}>
-              <Badge label={hasCharacter ? "Ficha ativa" : "Sem ficha"} accent="blue" />
-              {user?.isMaster ? <Badge label="Acesso de Mestre" accent="purple" /> : null}
-            </div>
-          </div>
+              <h1 className={`ui-title ${homeStyles.heroTitle}`}>{hero.title}</h1>
+              <p className={homeStyles.heroDescription}>{hero.description}</p>
 
-          <div style={styles.heroInfoBox}>
-            <span style={styles.heroInfoLabel}>Status da ficha</span>
-            <strong style={styles.heroInfoValue}>
-              {hasCharacter ? character.name : "Nenhuma ficha"}
-            </strong>
-            <p style={styles.heroInfoMeta}>
-              {hasCharacter
-                ? `${character.class || "-"} • Abra a ficha completa do personagem`
-                : "Crie sua primeira ficha para começar"}
-            </p>
-          </div>
-        </section>
+              <div className={homeStyles.heroActions}>
+                <Link
+                  href={isMaster ? "/master" : characterHref}
+                  className={`ui-interactive ${homeStyles.primaryButton}`}
+                >
+                  {isMaster
+                    ? "Abrir painel do mestre"
+                    : hasCharacter
+                      ? "Continuar personagem"
+                      : "Criar meu personagem"}
+                  <ArrowIcon />
+                </Link>
 
-        <section style={styles.quickStatsGrid}>
-          {homeStats.map((item) => (
-            <InfoCard
-              key={item.label}
-              label={item.label}
-              value={item.value}
-              small={item.small}
-            />
-          ))}
-        </section>
+                {isMaster ? (
+                  <Link
+                    href={characterHref}
+                    className={`ui-interactive ${homeStyles.ghostButton}`}
+                  >
+                    {hasCharacter ? "Ver minha ficha" : "Criar minha ficha"}
+                  </Link>
+                ) : hasCharacter ? (
+                  <Link
+                    href="/characters"
+                    className={`ui-interactive ${homeStyles.ghostButton}`}
+                  >
+                    Visão geral
+                  </Link>
+                ) : null}
+              </div>
 
-        <section style={styles.actionsGrid}>
-          <Link href={mainHref} style={styles.primaryActionCard}>
-            <div style={styles.actionContent}>
-              <span style={styles.actionTag}>Jogador</span>
-              <h2 style={styles.actionTitle}>
-                {hasCharacter ? "Ver Ficha" : "Criar Ficha"}
-              </h2>
-              <p style={styles.actionText}>
-                {hasCharacter
-                  ? "Abra a ficha completa do personagem com atributos, perícias e fôlego."
-                  : "Você ainda não tem ficha. Clique para criar e começar."}
+              <p className={`ui-break-word ${homeStyles.accountLine}`}>
+                <span>Conta conectada</span>
+                {user?.email || "—"}
               </p>
             </div>
-            <div style={styles.actionSide}>
-              <span style={styles.actionArrow}>→</span>
-            </div>
-          </Link>
 
-          {user?.isMaster ? (
-            <Link href="/master" style={styles.secondaryActionCard}>
-              <div style={styles.actionContent}>
-                <span style={styles.actionTag}>Mestre</span>
-                <h2 style={styles.actionTitleDark}>Painel do Mestre</h2>
-                <p style={styles.actionTextDark}>
-                  Ajuste os pontos globais do sistema e visualize todas as fichas dos jogadores.
+            <div className={`ui-hero-side ${homeStyles.identityPanel}`}>
+              <div className={homeStyles.sigil} aria-hidden="true">
+                <span className={homeStyles.sigilOrbit} />
+                <span className={homeStyles.sigilCore}>K</span>
+                <span className={homeStyles.sigilIndex}>01</span>
+              </div>
+
+              <div className={homeStyles.identityCopy}>
+                <span className={homeStyles.identityEyebrow}>
+                  {isMaster ? "Visão do mestre" : "Ficha em foco"}
+                </span>
+                <h2>
+                  {isMaster
+                    ? "Campanha Keys Lock"
+                    : hasCharacter
+                      ? character.name
+                      : "Novo personagem"}
+                </h2>
+                <p>
+                  {isMaster
+                    ? `${campaign?.characterCount ?? 0} ${
+                        Number(campaign?.characterCount || 0) === 1 ? "ficha ativa" : "fichas ativas"
+                      } na campanha.`
+                    : hasCharacter
+                      ? `${character.class || "Sem classe"} · Nível ${character.level ?? 1}`
+                      : "O primeiro capítulo ainda está em branco."}
                 </p>
+                <div className={homeStyles.identityStatus}>
+                  <span aria-hidden="true" />
+                  {hero.status}
+                </div>
               </div>
-              <div style={styles.actionSide}>
-                <span style={styles.actionArrowDark}>↗</span>
-              </div>
-            </Link>
-          ) : null}
-        </section>
+            </div>
+          </section>
+
+          <section aria-labelledby="overview-title" className={homeStyles.section}>
+            <SectionHeading
+              index="02"
+              eyebrow="Leitura rápida"
+              title="Tudo que importa, sem perder o ritmo."
+              id="overview-title"
+            />
+
+            <div className={homeStyles.overviewGrid}>
+              {overview.map((item, index) => (
+                <MetricCard key={item.label} index={index + 1} {...item} />
+              ))}
+            </div>
+          </section>
+
+          <section aria-labelledby="routes-title" className={homeStyles.section}>
+            <SectionHeading
+              index="03"
+              eyebrow="Próximo movimento"
+              title="Escolha sua rota."
+              id="routes-title"
+            />
+
+            <div className={homeStyles.routeGrid}>
+              <RouteCard
+                href={characterHref}
+                index="01"
+                eyebrow="Área do jogador"
+                title={hasCharacter ? "Abrir ficha" : "Criar ficha"}
+                description={
+                  hasCharacter
+                    ? "Entre na ficha completa para consultar atributos, habilidades, fôlego e progressão."
+                    : "Defina classe, atributos e habilidade inicial para colocar seu personagem em campo."
+                }
+                footer={hasCharacter ? character.name : "Começar agora"}
+                accent="blue"
+              />
+
+              {isMaster ? (
+                <RouteCard
+                  href="/master"
+                  index="02"
+                  eyebrow="Área do mestre"
+                  title="Conduzir campanha"
+                  description="Distribua pontos, acompanhe o fôlego e consulte cada ficha sem interromper a sessão."
+                  footer={`${campaign?.playerCount ?? 0} ${
+                    Number(campaign?.playerCount || 0) === 1 ? "jogador" : "jogadores"
+                  } na mesa`}
+                  accent="violet"
+                />
+              ) : (
+                <PlayerRanking ranking={ranking} />
+              )}
+            </div>
+          </section>
+
+          <footer className={homeStyles.manifesto}>
+            <span className={homeStyles.manifestoLine} aria-hidden="true" />
+            <p>Leia o campo. Escolha o momento. Deixe sua marca.</p>
+            <span className={homeStyles.manifestoCode}>KEYS / LOCK</span>
+          </footer>
+        </main>
       </div>
     </div>
   );
 }
 
-function InfoCard({ label, value, small = false }) {
+function SectionHeading({ index, eyebrow, title, id }) {
   return (
-    <div style={styles.infoCard}>
-      <span style={styles.infoLabel}>{label}</span>
-      <strong style={{ ...styles.infoValue, fontSize: small ? 18 : 26 }}>
-        {value}
-      </strong>
+    <div className={homeStyles.sectionHeading}>
+      <span className={homeStyles.sectionIndex}>{index}</span>
+      <div>
+        <p>{eyebrow}</p>
+        <h2 id={id}>{title}</h2>
+      </div>
     </div>
   );
 }
 
-function Badge({ label, accent = "blue" }) {
-  const accents = {
-    blue: {
-      bg: "rgba(37,99,235,0.16)",
-      border: "rgba(96,165,250,0.35)",
-      color: "#bfdbfe",
-    },
-    purple: {
-      bg: "rgba(124,58,237,0.16)",
-      border: "rgba(192,132,252,0.35)",
-      color: "#e9d5ff",
-    },
-  };
-
-  const current = accents[accent] || accents.blue;
-
+function MetricCard({ index, label, value, meta, tone, compact = false }) {
   return (
-    <span
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 8,
-        padding: "8px 12px",
-        borderRadius: 999,
-        border: `1px solid ${current.border}`,
-        background: current.bg,
-        color: current.color,
-        fontSize: 13,
-        fontWeight: 700,
-      }}
-    >
-      ✦ {label}
-    </span>
+    <article className={`${homeStyles.metricCard} ${homeStyles[`metric_${tone}`]}`}>
+      <div className={homeStyles.metricTopline}>
+        <span>{String(index).padStart(2, "0")}</span>
+        <span className={homeStyles.metricPulse} aria-hidden="true" />
+      </div>
+      <p>{label}</p>
+      <strong className={compact ? homeStyles.metricCompact : undefined}>{value}</strong>
+      <small>{meta}</small>
+    </article>
   );
 }
 
-const styles = {
+function RouteCard({ href, index, eyebrow, title, description, footer, accent }) {
+  return (
+    <Link
+      href={href}
+      className={`ui-interactive ${homeStyles.routeCard} ${homeStyles[`route_${accent}`]}`}
+    >
+      <div className={homeStyles.routeTopline}>
+        <span>{index}</span>
+        <span>{eyebrow}</span>
+      </div>
+      <div className={homeStyles.routeBody}>
+        <h3>{title}</h3>
+        <p>{description}</p>
+      </div>
+      <div className={homeStyles.routeFooter}>
+        <span>{footer}</span>
+        <span className={homeStyles.routeArrow} aria-hidden="true">
+          <ArrowIcon />
+        </span>
+      </div>
+    </Link>
+  );
+}
+
+const PLAYER_RANKING_TABS = [
+  { key: "scorers", label: "Artilharia", metric: "Gols" },
+  { key: "assists", label: "Mestre das Assistências", metric: "Assist." },
+  { key: "bestPlayers", label: "Melhores Jogadores", metric: "Nota" },
+];
+
+function formatRankingValue(value, category) {
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue)) return "—";
+
+  if (category === "bestPlayers") {
+    return numericValue.toLocaleString("pt-BR", {
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 1,
+    });
+  }
+
+  return numericValue.toLocaleString("pt-BR", { maximumFractionDigits: 0 });
+}
+
+function PlayerRanking({ ranking }) {
+  const [activeTab, setActiveTab] = useState("scorers");
+  const isPublished = Boolean(ranking?.isPublished);
+  const activeDefinition =
+    PLAYER_RANKING_TABS.find((tab) => tab.key === activeTab) || PLAYER_RANKING_TABS[0];
+  const entries = isPublished
+    ? ranking?.categories?.[activeTab] || []
+    : [];
+
+  return (
+    <article className={homeStyles.rankingCard}>
+      <div className={homeStyles.rankingHeader}>
+        <div>
+          <span className={homeStyles.rankingIndex}>02 / RANKING</span>
+          <h3>Ranking da campanha</h3>
+        </div>
+        <span
+          className={
+            isPublished ? homeStyles.rankingLive : homeStyles.rankingPrivate
+          }
+        >
+          <span aria-hidden="true" />
+          {isPublished ? "Publicado" : "Privado"}
+        </span>
+      </div>
+
+      {isPublished ? (
+        <>
+          <div
+            className={homeStyles.rankingTabs}
+            role="tablist"
+            aria-label="Categorias do ranking"
+          >
+            {PLAYER_RANKING_TABS.map((tab) => (
+              <button
+                className={
+                  activeTab === tab.key
+                    ? homeStyles.rankingTabActive
+                    : homeStyles.rankingTab
+                }
+                key={tab.key}
+                type="button"
+                role="tab"
+                aria-selected={activeTab === tab.key}
+                onClick={() => setActiveTab(tab.key)}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          <div className={homeStyles.rankingList}>
+            {entries.length ? (
+              entries.map((entry, index) => (
+                <div className={homeStyles.rankingRow} key={`${activeTab}-${entry.characterId}`}>
+                  <span className={homeStyles.rankingPosition}>
+                    {String(index + 1).padStart(2, "0")}
+                  </span>
+                  <div>
+                    <strong>{entry.name}</strong>
+                    <span>{entry.class || "Sem classe"}</span>
+                  </div>
+                  <div className={homeStyles.rankingValue}>
+                    <strong>{formatRankingValue(entry.value, activeTab)}</strong>
+                    <span>{activeDefinition.metric}</span>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className={homeStyles.rankingEmpty}>
+                Nenhum jogador lançado nesta categoria.
+              </div>
+            )}
+          </div>
+        </>
+      ) : (
+        <div className={homeStyles.rankingLocked}>
+          <span className={homeStyles.rankingLock} aria-hidden="true">K</span>
+          <div>
+            <strong>Ranking em atualização</strong>
+            <p>O mestre ainda não desprivou os resultados da campanha.</p>
+          </div>
+        </div>
+      )}
+    </article>
+  );
+}
+
+function ArrowIcon() {
+  return (
+    <svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true">
+      <path d="M4 10h11M10.5 5.5 15 10l-4.5 4.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+const loadingStyles = {
   page: {
-    minHeight: "100vh",
-    background:
-      "radial-gradient(circle at top left, rgba(37,99,235,0.18), transparent 24%), radial-gradient(circle at bottom right, rgba(59,130,246,0.12), transparent 28%), #060c18",
-    color: "#f8fafc",
-    padding: "24px",
-    position: "relative",
-    overflow: "hidden",
-  },
-  bgOrbTop: {
-    position: "absolute",
-    top: -120,
-    left: -100,
-    width: 280,
-    height: 280,
-    borderRadius: "50%",
-    background: "rgba(37,99,235,0.15)",
-    filter: "blur(40px)",
-    pointerEvents: "none",
-  },
-  bgOrbBottom: {
-    position: "absolute",
-    bottom: -140,
-    right: -80,
-    width: 320,
-    height: 320,
-    borderRadius: "50%",
-    background: "rgba(59,130,246,0.12)",
-    filter: "blur(48px)",
-    pointerEvents: "none",
-  },
-  container: {
-    width: "100%",
-    maxWidth: "1360px",
-    margin: "0 auto",
-    display: "flex",
-    flexDirection: "column",
-    gap: "20px",
-    position: "relative",
-    zIndex: 1,
-  },
-  loadingPage: {
     minHeight: "100vh",
     background: "#060c18",
     color: "#f8fafc",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "24px",
-  },
-  loadingCard: {
-    background: "#111827",
-    border: "1px solid rgba(255,255,255,0.08)",
-    borderRadius: "20px",
-    padding: "28px 36px",
-    fontSize: "18px",
-  },
-  topBar: {
-    display: "flex",
-    justifyContent: "flex-end",
-    alignItems: "center",
-  },
-  logoutButton: {
-    background: "linear-gradient(135deg, #b91c1c, #dc2626)",
-    color: "#fff",
-    border: "none",
-    borderRadius: "14px",
-    padding: "12px 16px",
-    fontWeight: "bold",
-    cursor: "pointer",
-    boxShadow: "0 10px 24px rgba(220,38,38,0.22)",
-  },
-  heroCard: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: "20px",
-    background: "linear-gradient(135deg, rgba(15,23,42,0.95), rgba(17,24,39,0.88))",
-    borderRadius: "28px",
-    padding: "30px",
-    border: "1px solid rgba(255,255,255,0.08)",
-    boxShadow: "0 18px 45px rgba(0,0,0,0.24)",
-  },
-  heroTag: {
-    margin: 0,
-    marginBottom: "8px",
-    color: "#93c5fd",
-    fontSize: "14px",
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-    fontWeight: 700,
-  },
-  heroTitle: {
-    margin: 0,
-    fontSize: "42px",
-    lineHeight: 1.08,
-  },
-  heroSubtitle: {
-    marginTop: "12px",
-    marginBottom: 0,
-    color: "#cbd5e1",
-    fontSize: "17px",
-    maxWidth: "760px",
-    lineHeight: 1.7,
-  },
-  heroBadgeRow: {
-    display: "flex",
-    gap: "10px",
-    flexWrap: "wrap",
-    marginTop: "18px",
-  },
-  heroInfoBox: {
-    minWidth: "280px",
-    background: "rgba(255,255,255,0.04)",
-    borderRadius: "22px",
-    padding: "20px",
-    display: "flex",
-    flexDirection: "column",
-    gap: "8px",
-    border: "1px solid rgba(255,255,255,0.08)",
-  },
-  heroInfoLabel: {
-    color: "#94a3b8",
-    fontSize: "13px",
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-  },
-  heroInfoValue: {
-    fontSize: "24px",
-    fontWeight: "bold",
-  },
-  heroInfoMeta: {
-    color: "#cbd5e1",
-    fontSize: "14px",
-    lineHeight: 1.6,
-    margin: 0,
-  },
-  quickStatsGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-    gap: "16px",
-  },
-  infoCard: {
-    background: "rgba(15,23,42,0.88)",
-    borderRadius: "22px",
-    padding: "20px",
-    border: "1px solid rgba(255,255,255,0.06)",
-    display: "flex",
-    flexDirection: "column",
-    gap: "10px",
-    boxShadow: "0 14px 36px rgba(0,0,0,0.18)",
-  },
-  infoLabel: {
-    color: "#94a3b8",
-    fontSize: "13px",
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-  },
-  infoValue: {
-    fontWeight: "bold",
-    wordBreak: "break-word",
-  },
-  actionsGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
-    gap: "18px",
-  },
-  primaryActionCard: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: "16px",
-    background: "linear-gradient(135deg, #1d4ed8, #2563eb)",
-    color: "#fff",
-    textDecoration: "none",
-    borderRadius: "28px",
-    padding: "28px",
-    minHeight: "220px",
-    boxShadow: "0 14px 34px rgba(37,99,235,0.26)",
-  },
-  secondaryActionCard: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: "16px",
-    background: "linear-gradient(135deg, rgba(15,23,42,0.95), rgba(30,41,59,0.96))",
-    color: "#fff",
-    textDecoration: "none",
-    borderRadius: "28px",
-    padding: "28px",
-    minHeight: "220px",
-    border: "1px solid rgba(255,255,255,0.08)",
-    boxShadow: "0 14px 34px rgba(0,0,0,0.22)",
-  },
-  actionContent: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "10px",
-    maxWidth: "420px",
-  },
-  actionTag: {
-    fontSize: "13px",
-    textTransform: "uppercase",
-    letterSpacing: "0.08em",
-    opacity: 0.9,
-    fontWeight: 700,
-  },
-  actionTitle: {
-    margin: 0,
-    fontSize: "34px",
-    lineHeight: 1.1,
-  },
-  actionTitleDark: {
-    margin: 0,
-    fontSize: "34px",
-    lineHeight: 1.1,
-    color: "#f8fafc",
-  },
-  actionText: {
-    margin: 0,
-    fontSize: "16px",
-    lineHeight: 1.7,
-    opacity: 0.96,
-  },
-  actionTextDark: {
-    margin: 0,
-    fontSize: "16px",
-    lineHeight: 1.7,
-    color: "#cbd5e1",
-  },
-  actionSide: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  actionArrow: {
-    fontSize: "44px",
-    fontWeight: "bold",
-    opacity: 0.95,
-  },
-  actionArrowDark: {
-    fontSize: "40px",
-    fontWeight: "bold",
-    color: "#93c5fd",
+    placeItems: "center",
+    padding: 24,
   },
 };

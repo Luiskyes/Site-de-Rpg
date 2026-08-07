@@ -8,44 +8,104 @@ datasource db {
 }
 
 model Character {
-  id              Int      @id @default(autoincrement())
-  name            String
-  class           String
-  level           Int      @default(1)
-  attributes      Json?
-  notes           String?
-  ownerId         Int      @unique(map: "Character_ownerId_unique")
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  age             Int?
-  heightCm        Int?
-  weightKg        Int?
-  staminaBase     Int?
-  staminaCurrent  Int?
-  baseAttributes  Json?
-  baseSkills      Json?
-  classId         Int?
-  selectedAbility String?
-  classData       Class?   @relation(fields: [classId], references: [id])
-  owner           users    @relation(fields: [ownerId], references: [id])
+  id                     Int      @id @default(autoincrement())
+  name                   String
+  class                  String
+  level                  Int      @default(1)
+  attributes             Json     @default("{}")
+  notes                  String?
+  ownerId                Int
+  createdAt              DateTime @default(now()) @db.Timestamp(6)
+  updatedAt              DateTime @default(now()) @updatedAt @db.Timestamp(6)
+  age                    Int?
+  heightCm               Int?
+  weightKg               Int?
+  staminaBase            Int      @default(100)
+  staminaCurrent         Int      @default(100)
+  baseAttributes         Json     @default("{}")
+  baseSkills             Json     @default("{}")
+  classId                Int?
+  selectedAbility        String?
+  classAttributes        Json     @default("{}")
+  classSkills            Json     @default("{}")
+  allocatedAttributes    Json     @default("{}")
+  allocatedSkills        Json     @default("{}")
+  levelUpAttributes      Json     @default("{}")
+  levelUpSkills          Json     @default("{}")
+  specialTrait           String?
+  isAmbidextrous         Boolean  @default(false)
+  progressPoints         Int      @default(0)
+  spentAttributeUpgrades Int      @default(0)
+  spentSkillUpgrades     Int      @default(0)
+  extraAbilities         Json     @default("[]")
+  boughtAbilities        Json     @default("[]")
+  customAbilities        Json     @default("[]")
+  staminaUpgradeRolls    Json     @default("[]")
+  classData              Class?   @relation(fields: [classId], references: [id], onUpdate: NoAction)
+  owner                  users    @relation(fields: [ownerId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 }
 
 model Class {
   id               Int         @id @default(autoincrement())
   name             String      @unique
   description      String?
-  attributeBonuses Json?
-  skillBonuses     Json?
-  abilities        Json?
-  createdAt        DateTime    @default(now())
-  updatedAt        DateTime    @default(now()) @updatedAt
+  attributeBonuses Json        @default("{}")
+  skillBonuses     Json        @default("{}")
+  abilities        Json        @default("[]")
+  createdAt        DateTime    @default(now()) @db.Timestamp(6)
+  updatedAt        DateTime    @default(now()) @updatedAt @db.Timestamp(6)
   characters       Character[]
 }
 
 model users {
-  id           Int        @id(map: "User_pkey") @default(autoincrement())
-  email        String     @unique(map: "User_email_key")
-  passwordHash String
-  createdAt    DateTime   @default(now())
-  characters   Character?
+  id                  Int                  @id @default(autoincrement())
+  email               String               @unique
+  passwordHash        String?
+  googleSub           String?              @unique
+  emailVerifiedAt     DateTime?             @db.Timestamp(6)
+  createdAt           DateTime              @default(now()) @db.Timestamp(6)
+  characters          Character[]
+  passwordResetTokens PasswordResetToken[]
+}
+
+model PasswordResetToken {
+  id        Int       @id @default(autoincrement())
+  userId    Int
+  tokenHash String    @unique
+  expiresAt DateTime  @db.Timestamp(6)
+  usedAt    DateTime? @db.Timestamp(6)
+  createdAt DateTime  @default(now()) @db.Timestamp(6)
+  user      users     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+}
+
+model GameConfig {
+  id                        Int      @id @default(autoincrement())
+  attributePointsAtCreation Int      @default(7)
+  skillPointsAtCreation     Int      @default(15)
+  attributeMaxAtCreation    Int      @default(5)
+  skillMaxAtCreation        Int      @default(10)
+  levelUpAttributePoints    Int      @default(2)
+  levelUpSkillPoints        Int      @default(1)
+  updatedAt                 DateTime @default(now()) @db.Timestamp(6)
+}
+
+model RankingBoard {
+  id                   Int       @id @default(1)
+  isPublished          Boolean   @default(false)
+  scorersDraft         Json      @default("[]")
+  assistsDraft         Json      @default("[]")
+  bestPlayersDraft     Json      @default("[]")
+  scorersPublished     Json      @default("[]")
+  assistsPublished     Json      @default("[]")
+  bestPlayersPublished Json      @default("[]")
+  publishedAt          DateTime? @db.Timestamp(6)
+  updatedAt            DateTime  @default(now()) @updatedAt @db.Timestamp(6)
+}
+
+model playing_with_neon {
+  id    Int    @id @default(autoincrement())
+  name  String
+  value Float? @db.Real
 }

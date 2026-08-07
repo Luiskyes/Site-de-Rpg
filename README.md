@@ -1,306 +1,240 @@
-# ⚽ RPG Character Manager – Blue Lock Inspired
+# Keys Lock — Ficha Web
 
-Sistema web para criação, gerenciamento e progressão de fichas de personagens para RPGs inspirados no universo competitivo de **Blue Lock**.
+Aplicação full-stack para criação, gerenciamento e progressão de fichas de RPG
+inspiradas no universo competitivo de **Blue Lock**. Jogadores administram seus
+personagens e o mestre acompanha toda a campanha em um painel exclusivo.
 
-O projeto foi desenvolvido como aplicação **full-stack** utilizando **Next.js + PostgreSQL**, com sistema de autenticação, gerenciamento de personagens e painel de mestre para controle do jogo.
+## Demo
 
----
+[Acessar o Keys Lock](https://site-keys-lock.vercel.app/)
 
-# 🌐 Demo
+## Principais funcionalidades
 
-A aplicação está disponível publicamente:
+### Jogadores
 
-**🔗 Acesse o site:**
-https://site-keys-lock.vercel.app/register
----
+- Cadastro e login com e-mail e senha.
+- Login e validação de conta com Google Identity Services.
+- Recuperação de senha com token temporário e envio por e-mail.
+- Criação responsiva de personagem com classe, atributos, perícias e habilidade inicial.
+- Ficha completa com atributos, perícias, habilidades, fôlego e progressão.
+- Compra de melhorias usando pontos concedidos pelo mestre.
+- Compra de fôlego por 5 pontos com rolagem animada de `2d6`.
+- Compra de habilidades da classe sem permitir recomprar a habilidade inicial.
+- Criação de habilidades personalizadas com nome e descrição persistentes.
 
-# 📷 Interface
+### Mestre
 
-<img width="1877" height="1004" alt="Captura de tela 2026-03-24 234816" src="https://github.com/user-attachments/assets/cc719d58-9c3b-4c19-9a5f-678ce72c7afa" />
-<img width="1876" height="1006" alt="Captura de tela 2026-03-24 234824" src="https://github.com/user-attachments/assets/a6124e17-1c9b-496d-890a-3a628cf0f346" />
-<img width="1875" height="1008" alt="Captura de tela 2026-03-24 234831" src="https://github.com/user-attachments/assets/2cc60274-6c39-4ebb-87a6-525c45b79b5e" />
-<img width="1875" height="1008" alt="Captura de tela 2026-03-24 234831" src="https://github.com/user-attachments/assets/bd3c2891-91b8-42c1-93dd-72366623e338" />
+- Painel com todas as fichas e configurações globais da campanha.
+- Visualização da ficha no mesmo formato apresentado ao jogador.
+- Consulta de pontos disponíveis, pontos gastos e fôlego atual.
+- Concessão de pontos de progressão.
+- Alteração manual do fôlego e exclusão de fichas.
+- Ranking editável com as categorias **Artilharia**, **Mestre das Assistências**
+  e **Melhores Jogadores**.
+- Rascunho privado do ranking e publicação controlada pelo mestre.
+- Notas dos melhores jogadores entre `0,0` e `10,0`.
 
+### Interface e desempenho
 
+- Layout responsivo para desktop e dispositivos móveis.
+- Identidade visual própria em azul, ciano e violeta.
+- Componentes reutilizáveis e carregamento consolidado dos painéis.
+- Pool de conexões PostgreSQL reutilizado entre execuções do servidor.
 
+## Tecnologias
 
+- Next.js 16 com App Router
+- React 18
+- JavaScript e TypeScript
+- CSS Modules
+- PostgreSQL
+- Prisma
+- Neon Postgres com connection pooling
+- JWT e bcryptjs
+- Google Identity Services
+- Resend para recuperação de senha
+- Vercel para hospedagem
 
----
+## Estrutura principal
 
-# 🚀 Tecnologias Utilizadas
-
-### Frontend
-
-* Next.js (App Router)
-* React
-* JavaScript / TypeScript
-* CSS
-
-### Backend
-
-* Next.js API Routes
-* Node.js runtime
-
-### Banco de Dados
-
-* PostgreSQL
-* Neon Database (serverless)
-
-### Autenticação
-
-* JWT
-* bcryptjs
-
-### Deploy
-
-* Vercel
-
----
-
-# 🧠 Funcionalidades
-
-## 👤 Sistema de Usuários
-
-* Registro de usuário
-* Login com autenticação JWT
-* Sessões seguras
-
----
-
-## 🎮 Sistema de Personagens
-
-Cada personagem possui:
-
-* Classe
-* Atributos
-* Perícias
-* Habilidades
-* Estamina
-* Progressão
-
-Os personagens podem evoluir ao longo das partidas.
-
----
-
-## 🧬 Classes disponíveis
-
-O sistema possui múltiplas classes inspiradas em arquétipos de jogadores:
-
-* Playmaker
-* Dominador Superior
-* Especialista Espacial
-* Velocista
-* Finalizador Clínico
-* Driblador
-* Atacante Completo
-* Caçador de Gols
-* Atacante Controlador
-* Multi-Funções
-* Atacante Saltador
-* Defensor Espacial
-* Louco da Estamina
-* Vilão do Campo
-* Goleiro
-* Ninja
-* Imperador
-* Devorador de Ás
-* Duelista
-* Cachorro Louco
-
-Cada classe possui:
-
-* bônus de atributos
-* bônus de perícias
-* habilidades únicas
-
----
-
-## 📈 Sistema de Progressão
-
-Após partidas, o mestre pode conceder **pontos de progresso**.
-
-Os pontos podem ser utilizados para:
-
-* aumentar atributos
-* aumentar perícias
-* comprar habilidades
-* criar habilidades personalizadas
-
----
-
-## 👑 Painel do Mestre
-
-O mestre possui controle total do sistema:
-
-* visualizar todas as fichas
-* editar personagens
-* conceder pontos
-* alterar estamina
-* remover fichas
-
----
-
-# 🗄️ Estrutura do Banco de Dados
-
-Principais tabelas:
-
-```
-users
-Character
-Class
-GameConfig
-```
-
-### users
-
-Armazena os usuários registrados.
-
-### Character
-
-Armazena as fichas dos jogadores.
-
-### Class
-
-Define todas as classes disponíveis.
-
-### GameConfig
-
-Configuração geral do sistema.
-
----
-
-# 📦 Estrutura do Projeto
-
-```
+```text
 app/
- ├ api/
- │ ├ login
- │ ├ register
- │ ├ characters
- │ ├ classes
- │ └ master
- │
- ├ characters/
- │ ├ create
- │ ├ [id]
- │ └ me
- │
- ├ login
- ├ register
- └ master
+├── api/                   # autenticação, fichas, progressão e mestre
+├── characters/            # criação e visualização das fichas
+├── components/            # componentes compartilhados
+├── forgot-password/       # solicitação de recuperação
+├── login/                 # acesso à conta
+├── master/                # painel e consulta de fichas pelo mestre
+├── register/              # criação de conta
+└── reset-password/        # definição da nova senha
 
 lib/
- ├ db.ts
- ├ auth.js
- ├ master-auth.js
- ├ character-rules.js
- └ character-calculations.js
+├── auth.js
+├── character-rules.js
+├── custom-abilities.js
+├── db.ts
+├── password-policy.js
+├── rankings.js
+└── stamina-upgrades.js
+
+prisma/
+├── migrations/
+└── schema.prisma
 
 scripts/
- └ sync-classes-from-book.mjs
+├── local-db.ps1
+├── neon-db.ps1
+└── sync-classes-from-book.mjs
 ```
 
----
+## Banco de dados
 
-# ⚙️ Configuração Local
+As tabelas principais são:
 
-Clone o projeto:
+- `users`: contas locais e identidades Google.
+- `PasswordResetToken`: tokens de recuperação de senha com expiração e uso único.
+- `Character`: dados completos e progressão das fichas.
+- `Class`: catálogo das 20 classes e suas habilidades.
+- `GameConfig`: limites e pontos configuráveis pelo mestre.
+- `RankingBoard`: rascunho privado e versão publicada dos rankings.
 
-```
-git clone https://github.com/Luiskyes/Site-de-Rpg
-```
+## Configuração do ambiente
 
-Entre na pasta:
+Requisitos:
 
-```
-cd Site-de-Rpg
-```
+- Node.js 20 ou superior.
+- npm.
+- Uma conexão PostgreSQL local ou um projeto no Neon.
 
 Instale as dependências:
 
-```
+```bash
 npm install
 ```
 
-Crie um arquivo `.env`:
+Copie `.env.example` para `.env.local` e preencha:
 
-```
-DATABASE_URL=
-JWT_SECRET=
-MASTER_EMAILS=
+```env
+DATABASE_URL="postgresql://usuario:senha@host/banco?sslmode=require"
+DATABASE_POOL_MAX=5
+JWT_SECRET="uma-chave-longa-e-aleatoria"
+MASTER_EMAILS="mestre@example.com"
+APP_URL="http://localhost:3000"
+NEXT_PUBLIC_GOOGLE_CLIENT_ID=""
+RESEND_API_KEY=""
+PASSWORD_RESET_FROM_EMAIL="Keys Lock <noreply@example.com>"
 ```
 
-Execute o projeto:
+Arquivos `.env*` reais são ignorados pelo Git. Nunca envie URLs de banco,
+senhas, chaves OAuth ou tokens para o repositório.
 
+## PostgreSQL local
+
+No Windows, com PostgreSQL 18 instalado, prepare o banco local:
+
+```bash
+npm run db:local:setup
 ```
+
+Comandos disponíveis:
+
+```bash
+npm run db:local:start
+npm run db:local:status
+npm run db:local:stop
+```
+
+O ambiente local usa `postgresql://rpg_local@127.0.0.1:5433/site_rpg`.
+
+## Neon Postgres
+
+No painel do Neon, abra **Connect**, selecione a connection string com pooling
+e copie a URL que contém `-pooler` e `sslmode=require`. Salve-a em
+`DATABASE_URL` no `.env.local`.
+
+Crie ou atualize as tabelas, os registros obrigatórios e as classes:
+
+```bash
+npm run db:neon:setup
+```
+
+Confira a conexão e execute um teste transacional sem deixar dados temporários:
+
+```bash
+npm run db:neon:status
+npm run db:neon:test
+```
+
+## Login com Google
+
+Crie um OAuth Client ID do tipo **Aplicativo da Web** no Google Cloud e adicione
+as origens utilizadas pelo projeto, por exemplo:
+
+```text
+http://localhost:3000
+https://seu-dominio.vercel.app
+```
+
+Salve o Client ID em `NEXT_PUBLIC_GOOGLE_CLIENT_ID`. O projeto valida o token
+Google no servidor antes de criar a sessão local.
+
+## Recuperação de senha
+
+Em produção, configure `RESEND_API_KEY` e um remetente autorizado em
+`PASSWORD_RESET_FROM_EMAIL`. Sem o Resend, o ambiente de desenvolvimento pode
+exibir o link de redefinição diretamente para facilitar testes locais.
+
+## Executar e validar
+
+Inicie o desenvolvimento:
+
+```bash
 npm run dev
 ```
 
-O site estará disponível em:
+Acesse [http://localhost:3000](http://localhost:3000).
 
-```
-http://localhost:3000
-```
+Gere o build de produção:
 
----
-
-# 🧪 Scripts
-
-Sincronizar classes do livro:
-
-```
-npm run sync:classes
-```
-
-Build de produção:
-
-```
+```bash
 npm run build
 ```
 
----
+Sincronize novamente o catálogo de classes quando necessário:
 
-# 📌 Objetivo do Projeto
+```bash
+npm run sync:classes
+```
 
-Este projeto foi desenvolvido para:
+## Deploy na Vercel
 
-* uso em campanhas de RPG
-* gerenciamento digital de fichas
-* aprendizado e prática de desenvolvimento full-stack
+Cadastre na Vercel as mesmas variáveis usadas em produção:
 
-Também serve como **projeto de portfólio** demonstrando:
+- `DATABASE_URL`
+- `DATABASE_POOL_MAX=5`
+- `JWT_SECRET`
+- `MASTER_EMAILS`
+- `APP_URL`
+- `NEXT_PUBLIC_GOOGLE_CLIENT_ID`
+- `RESEND_API_KEY`
+- `PASSWORD_RESET_FROM_EMAIL`
 
-* backend com Node
-* integração com banco de dados
-* autenticação
-* arquitetura de aplicação real
+Depois de atualizar variáveis públicas como o Client ID do Google, faça um novo
+deploy para que o Next.js gere o frontend com o valor atualizado.
 
----
+## Próximas evoluções
 
-# 📈 Melhorias Futuras
+- Histórico de partidas e temporadas.
+- Histórico das ações realizadas pelo mestre.
+- Auditoria das alterações de progressão.
+- Testes automatizados de interface e API no pipeline de deploy.
 
-Planejado para próximas versões:
+## Autor
 
-* Login com Google
-* Sistema de ranking de jogadores
-* Histórico de partidas
-* Sistema de temporadas
-* Interface para mobile
-* Logs de ações do mestre
+**Luís** — desenvolvimento backend e aplicações web.
 
----
+[GitHub](https://github.com/Luiskyes)
 
-# 👨‍💻 Autor
+## Licença
 
-Luís
-
-Desenvolvedor focado em **backend e aplicações web**.
-
-GitHub:
-https://github.com/Luiskyes
-
----
-
-# 📄 Licença
-
-Este projeto é open-source para fins educacionais e de uso pessoal em campanhas de RPG.
+Projeto open-source destinado a estudos e uso pessoal em campanhas de RPG.
